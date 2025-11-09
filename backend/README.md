@@ -4,7 +4,7 @@ Aby zainicjalizować projekt, terminalu (`CTRL+~`):
 
 ```bash
 cd backend
-pip install requirements.txt
+pip install -r requirements.txt
 ```
 
 # Uruchomienie Backend
