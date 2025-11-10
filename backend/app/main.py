@@ -1,8 +1,20 @@
 from typing import List, Union
 
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import sys
+import os
+
+
+# Dodanie ścieżki do folderu nadrzędnego ('backend'), aby znaleźć moduł 'services'
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from routers import video
+from services import video_processor
 
 app = FastAPI()
+
+# Video Route
+app.include_router(video.router, prefix="/video", tags=["Video"])
 
 
 @app.get("/")
@@ -72,30 +84,6 @@ def get_tracking_sessions():
 def get_session_details(session_id: str):
     # Pobiera szczegółowe dane dla konkretnej sesji śledzenia.
     return {"session_id": session_id, "details": "Szczegółowe dane sesji."}
-
-
-# --- Kamera i Wideo ---
-
-
-@app.get("/cameras", response_model=List[dict])
-def get_cameras():
-    # Zwraca listę dostępnych kamer w systemie.
-    return [
-        {"id": "cam1", "name": "Zintegrowana kamera"},
-        {"id": "cam2", "name": "Kamera USB"},
-    ]
-
-
-@app.post("/cameras/select")
-def select_camera():
-    # Pozwala wybrać kamerę, która będzie używana do śledzenia.
-    return {"message": "Wybrano kamerę: cam1"}
-
-
-@app.get("/ws/video/stream")
-def video_stream_placeholder():
-
-    return {"message": "Ten endpoint będzie w przyszłości obsługiwał strumień wideo"}
 
 
 # --- Analiza na żywo ---
