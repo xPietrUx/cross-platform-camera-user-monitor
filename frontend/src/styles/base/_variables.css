@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Roboto:ital,wght@0,100..900;1,100..900&family=Ubuntu:ital,wght@0,300;0,400;0,500;0,700;1,300;1,400;1,500;1,700&display=swap');
+/* 
+    ==========================================================================
+        CSS Custom Properties (Vars)
+    ==========================================================================
+*/
+
+:root {
+    /* Colors */
+    --text-color: #ffffff;
+    --success-color: #28a745;
+    --warning-color: #ffc107;
+    --error-color: #dc3545;
+    --gradient-start-color: #240b36;
+    --gradient-end-color: #c31432;
+    --body-bg: linear-gradient(to right, var(--gradient-start-color), var(--gradient-end-color));
+
+    /* Typography */
+    --font-family-prop:
+        'Ubuntu', ui-sans-serif, -apple-system, system-ui, Segoe UI, Helvetica, Apple Color Emoji,
+        Arial, sans-serif, Segoe UI Emoji, Segoe UI Symbol;
+    --base-font-size: 1rem;
+    --font-weight-thin: 200;
+    --font-weight-normal: 400;
+    --font-weight-bold: 700;
+    --gray-font: rgba(0, 0, 0, 0.5);
+
+    /* Spacing */
+    --spacing-unit: 1rem;
+    --spacing-xs: calc(var(--spacing-unit) * 0.25);
+    --spacing-sm: calc(var(--spacing-unit) * 0.5);
+    --spacing-md: var(--spacing-unit);
+    --spacing-lg: calc(var(--spacing-unit) * 1.5);
+    --spacing-xl: calc(var(--spacing-unit) * 3);
+
+    /* Borders */
+    --border: 1px solid var(--text-color);
+    --border-radius: 2rem;
+    --border-radius-sm: 1rem;
+
+    /* Animations, Transitions */
+    --animation-time: 0.3s;
+    --animation-type: cubic-bezier(0.65, 0.04, 0.36, 1);
+
+    /* Media Breakpoints */
+    --breakpoint-sm: 640px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 1048px;
+
+    /* Shadows */
+    --text-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --box-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+}
