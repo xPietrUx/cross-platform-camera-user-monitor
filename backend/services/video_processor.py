@@ -11,6 +11,11 @@ def generate_frames():
     # TODO: Dać wybór użytkownikowi z której kamery chce korzystać
     cap = cv2.VideoCapture(0)
 
+    # TODO: Zebrać informacje o rozdzielczości kamery i odświeżanie
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 3840)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 2160)
+    cap.set(cv2.CAP_PROP_FPS, 60)
+
     if not cap.isOpened():
         raise RuntimeError("Nie można otworzyć kamery")
 
@@ -35,7 +40,7 @@ def generate_frames():
             )
 
             # Opóźnienie by kontrolować liczbę klatek na sekundę
-            time.sleep(0.03)
+            time.sleep(1 / 60)
 
     finally:
         # Upewnienie, że kamera zostanie zwolniona po zakończeniu procesu
