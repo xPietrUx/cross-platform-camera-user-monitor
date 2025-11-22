@@ -147,7 +147,7 @@
 
         <ul class="menu-list">
             <li>
-                <a href="/logowanie" class="menu-item">
+                <a href="/login" class="menu-item">
                     <svg
                         class="menu-icon"
                         width="20"
@@ -186,7 +186,7 @@
                 </a>
             </li>
             <li>
-                <a href="/uzytkownicy" class="menu-item">
+                <a href="/users" class="menu-item">
                     <svg
                         class="menu-icon"
                         width="20"
