@@ -1,6 +1,7 @@
 <script lang="ts">
     import '../styles/style.css';
-
+    import '../app.css'; // Upewnij się, że ten import istnieje
+    import { page } from '$app/stores';
     let isMenuExpanded = false;
 
     function toggleMenu() {

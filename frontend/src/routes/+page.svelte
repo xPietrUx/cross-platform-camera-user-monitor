@@ -7,26 +7,30 @@
             title: 'Monitorowanie w Czasie Rzeczywistym',
             description:
                 'Aplikacja śledzi Twoją aktywność i skupienie, analizując obraz z kamery, aby pomóc Ci lepiej zarządzać czasem.',
-            imageUrl: 'https://images.unsplash.com/photo-1526628953301-3e589a6a8b74?q=80&w=2006&auto=format&fit=crop'
+            imageUrl:
+                'https://images.unsplash.com/photo-1526628953301-3e589a6a8b74?q=80&w=2006&auto=format&fit=crop',
         },
         {
             title: 'Inteligentna Analiza Otoczenia',
             description:
                 'Program wykrywa potencjalne rozproszenia w Twoim otoczeniu, pomagając utrzymać maksymalną koncentrację.',
-            imageUrl: 'https://images.pexels.com/photos/256219/pexels-photo-256219.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1'
+            imageUrl:
+                'https://images.pexels.com/photos/256219/pexels-photo-256219.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
         },
         {
             title: 'Prywatność jest Priorytetem',
             description:
                 'Cała analiza obrazu odbywa się lokalnie na Twoim komputerze. Żadne dane wideo nie opuszczają Twojego urządzenia.',
-            imageUrl: 'https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?q=80&w=2070&auto=format&fit=crop'
+            imageUrl:
+                'https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?q=80&w=2070&auto=format&fit=crop',
         },
         {
             title: 'Szczegółowe Raporty',
             description:
                 'Przeglądaj podsumowania i statystyki swoich sesji, aby zrozumieć, co wpływa na Twoją efektywność.',
-            imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop'
-        }
+            imageUrl:
+                'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop',
+        },
     ];
 
     let interval: ReturnType<typeof setInterval>;
@@ -64,52 +68,6 @@
     });
 </script>
 
-<!-- Karuzela jako tło -->
-<div class="background-carousel">
-    <div class="carousel">
-        {#each slides as slide, i}
-            <div class="slide" class:active={currentSlide === i} style="background-image: url({slide.imageUrl})" />
-        {/each}
-    </div>
-</div>
-
-<!-- Treść na wierzchu -->
-<div class="page-container">
-    <header class="welcome-header">
-        <h1>Witaj w Monitorze Aktywności</h1>
-        <p>Twoje centrum dowodzenia produktywnością</p>
-    </header>
-
-    <!-- Dynamiczny tekst karuzeli na środku -->
-    <div class="carousel-text-content">
-        {#each slides as slide, i}
-            <div class="text-slide" class:active={currentSlide === i}>
-                <h2>{slide.title}</h2>
-                <p>{slide.description}</p>
-            </div>
-        {/each}
-    </div>
-
-    <!-- Kontrolki i przycisk na dole -->
-    <footer class="page-footer">
-        <div class="main-controls">
-            <button class="nav-button" on:click={prevSlide} aria-label="Poprzedni slajd">&#10094;</button>
-            <button class="start-button">Rozpocznij monitorowanie</button>
-            <button class="nav-button" on:click={nextSlide} aria-label="Następny slajd">&#10095;</button>
-        </div>
-        <div class="dots">
-            {#each slides as _, i}
-                <button
-                    class="dot"
-                    class:active={currentSlide === i}
-                    on:click={() => goToSlide(i)}
-                    aria-label="Przejdź do slajdu {i + 1}"
-                />
-            {/each}
-        </div>
-    </footer>
-</div>
-
 <style>
     .background-carousel {
         position: fixed;
@@ -134,9 +92,8 @@
         justify-content: space-between;
         text-align: center;
         width: 100%;
-        height: 100%; /* Zmieniono na 100%, aby wypełnić rodzica */
+        height: 100%;
         box-sizing: border-box;
-        /* Usunięto padding, ponieważ jest on w +layout.svelte */
     }
 
     .welcome-header {
@@ -288,3 +245,57 @@
         box-shadow: 0 0 15px rgba(200, 50, 121, 0.7);
     }
 </style>
+
+<!-- Karuzela jako tło -->
+<div class="background-carousel">
+    <div class="carousel">
+        {#each slides as slide, i}
+            <div
+                class="slide"
+                class:active={currentSlide === i}
+                style="background-image: url({slide.imageUrl})"
+            />
+        {/each}
+    </div>
+</div>
+
+<!-- Treść na wierzchu -->
+<div class="page-container">
+    <header class="welcome-header">
+        <h1>Witaj w Monitorze Aktywności</h1>
+        <p>Twoje centrum dowodzenia produktywnością</p>
+    </header>
+
+    <!-- Dynamiczny tekst karuzeli na środku -->
+    <div class="carousel-text-content">
+        {#each slides as slide, i}
+            <div class="text-slide" class:active={currentSlide === i}>
+                <h2>{slide.title}</h2>
+                <p>{slide.description}</p>
+            </div>
+        {/each}
+    </div>
+
+    <!-- Kontrolki i przycisk na dole -->
+    <footer class="page-footer">
+        <div class="main-controls">
+            <button class="nav-button" on:click={prevSlide} aria-label="Poprzedni slajd"
+                >&#10094;</button
+            >
+            <button class="start-button">Rozpocznij monitorowanie</button>
+            <button class="nav-button" on:click={nextSlide} aria-label="Następny slajd"
+                >&#10095;</button
+            >
+        </div>
+        <div class="dots">
+            {#each slides as _, i}
+                <button
+                    class="dot"
+                    class:active={currentSlide === i}
+                    on:click={() => goToSlide(i)}
+                    aria-label="Przejdź do slajdu {i + 1}"
+                />
+            {/each}
+        </div>
+    </footer>
+</div>
