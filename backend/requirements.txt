@@ -3,3 +3,4 @@ pydantic
 fastapi[standard]
 numpy
 opencv-python
+sqlmodel

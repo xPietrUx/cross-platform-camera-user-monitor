@@ -1,20 +1,44 @@
-from typing import List, Union
-
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from contextlib import asynccontextmanager
+from typing import List
+from fastapi import FastAPI, Depends
+from sqlmodel import Session, select
 import sys
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 
 # Dodanie ścieżki do folderu nadrzędnego ('backend'), aby znaleźć moduł 'services'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from db.database import create_db_and_tables, get_session
+from db.models import User
 from routers import video
-from services import video_processor
+
+
+# Uruchomienie bazy danych
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
+
 
 app = FastAPI()
 
 # Video Route
 app.include_router(video.router, prefix="/video", tags=["Video"])
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
@@ -24,6 +48,20 @@ def home():
 
 
 # --- Użytkownicy ---
+# Dodanie bazy i użytkowników
+@app.post("/users/", response_model=User)
+def create_user(user: User, session: Session = Depends(get_session)):
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+# Podgląd użytkowników
+@app.get("/users/", response_model=List[User])
+def read_users(session: Session = Depends(get_session)):
+    users = session.exec(select(User)).all()
+    return users
 
 
 @app.post("/login")
