@@ -1,15 +1,23 @@
-from typing import List, Union
-
-from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Depends
+from sqlmodel import Session, select
 import sys
 import os
 
-
 # Dodanie ścieżki do folderu nadrzędnego ('backend'), aby znaleźć moduł 'services'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from db.database import create_db_and_tables, get_session
+from db.models import User
 from routers import video
-from services import video_processor
+
+
+# Uruchomienie bazy danych
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
+
 
 app = FastAPI()
 
