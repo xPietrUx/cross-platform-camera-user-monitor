@@ -28,5 +28,9 @@
         "typescript": "^5.9.3",
         "vite": "^7.1.10",
         "wait-on": "^9.0.1"
+    },
+    "dependencies": {
+        "frappe-charts": "^1.6.2",
+        "svelte-frappe-charts": "^2.0.0"
     }
 }
