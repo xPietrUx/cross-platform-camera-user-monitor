@@ -1,15 +1,38 @@
 <script lang="ts">
     import '../styles/style.css';
-    import '../app.css'; // Upewnij się, że ten import istnieje
-    import { page } from '$app/stores';
+    import '../app.css';
+    import { onMount } from 'svelte';
+    import { isCameraPageActive } from '../stores';
+
+    // --- Logika Menu ---
     let isMenuExpanded = false;
 
     function toggleMenu() {
         isMenuExpanded = !isMenuExpanded;
     }
+
+    // --- Logika Kamery ---
+    let videoStreamUrl: string | null = null;
+    let isVideoLoading = true;
+
+    console.log('videoStreamUrl: ' + videoStreamUrl);
+    console.log('isVideoLoading: ' + isVideoLoading);
+
+    onMount(() => {
+        videoStreamUrl = 'http://127.0.0.1:8000/video/stream';
+        console.log('videoStreamUrl: ' + videoStreamUrl);
+        console.log('isVideoLoading: ' + isVideoLoading);
+    });
+
+    function handleVideoLoad() {
+        isVideoLoading = !isVideoLoading;
+        console.log('videoStreamUrl: ' + videoStreamUrl);
+        console.log('isVideoLoading: ' + isVideoLoading);
+    }
 </script>
 
 <style>
+    /* --- Style Menu --- */
     .layout {
         display: flex;
         min-height: 100vh;
@@ -80,11 +103,6 @@
         background-color: rgba(255, 255, 255, 0.1);
     }
 
-    .menu-item.active {
-        background-color: rgba(255, 255, 255, 0.15);
-        font-weight: var(--font-weight-bold);
-    }
-
     .menu-icon {
         flex-shrink: 0;
     }
@@ -125,8 +143,117 @@
             padding: var(--spacing-md);
         }
     }
+
+    /* --- Style dla kamery --- */
+    .global-camera-preview {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 240px;
+        height: auto;
+        background-color: #000;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        overflow: hidden;
+        z-index: 9999;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+        transition: opacity 0.3s ease;
+    }
+
+    .global-camera-preview:hover {
+        opacity: 1;
+        border-color: rgba(255, 255, 255, 0.8);
+    }
+
+    .global-camera-preview img {
+        width: 100%;
+        height: auto;
+        display: block;
+    }
+
+    .global-camera-preview img.hidden {
+        opacity: 0;
+        position: absolute;
+    }
+
+    .loading-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 132px;
+        width: 100%;
+        color: white;
+        font-size: 0.8rem;
+    }
+
+    .spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        border-top-color: #fff;
+        animation: spin 1s ease-in-out infinite;
+        margin-bottom: 8px;
+    }
+
+    .status-indicator {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 10px;
+        height: 10px;
+        background-color: #28a745;
+        border-radius: 50%;
+        box-shadow: 0 0 5px #28a745;
+    }
+
+    .status-indicator.false {
+        background-color: #d10e0e;
+        box-shadow: 0 0 5px #a907073e;
+    }
+
+    .global-camera-preview.hidden-preview {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--box-shadow-lg);
+        }
+
+        .sidebar.collapsed {
+            width: 0;
+            padding: 0;
+            border: none;
+        }
+
+        .content {
+            margin-left: 0;
+            padding: var(--spacing-md);
+        }
+
+        .global-camera-preview {
+            width: 120px;
+            bottom: 10px;
+            right: 10px;
+        }
+    }
 </style>
 
+<!-- Sidebar Nav -->
 <div class="layout">
     <nav class="sidebar" class:collapsed={!isMenuExpanded}>
         <button class="toggle-btn" on:click={toggleMenu} aria-label="Przełącz menu">
@@ -168,7 +295,7 @@
                 </a>
             </li>
             <li>
-                <a href="/" class="menu-item">
+                <a href="/mainpage" class="menu-item">
                     <svg
                         class="menu-icon"
                         width="20"
@@ -234,4 +361,28 @@
     <main class="content">
         <slot />
     </main>
+
+    <!-- Global Camera Preview (Always on top) -->
+    {#if videoStreamUrl}
+        <a class="global-camera-preview" class:hidden-preview={$isCameraPageActive} href="/camera">
+            {#if isVideoLoading}
+                <div class="loading-container">
+                    <div class="status-indicator false" title="Kamera nieaktywna"></div>
+                    <div class="spinner"></div>
+                    <span>Łączenie...</span>
+                </div>
+            {/if}
+
+            <img
+                src={videoStreamUrl}
+                alt="System Monitorowania"
+                class:hidden={isVideoLoading}
+                on:load={handleVideoLoad}
+            />
+
+            {#if !isVideoLoading}
+                <div class="status-indicator" title="Kamera aktywna"></div>
+            {/if}
+        </a>
+    {/if}
 </div>
