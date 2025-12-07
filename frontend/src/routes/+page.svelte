@@ -254,7 +254,7 @@
                 class="slide"
                 class:active={currentSlide === i}
                 style="background-image: url({slide.imageUrl})"
-            />
+            ></div>
         {/each}
     </div>
 </div>
@@ -294,7 +294,7 @@
                     class:active={currentSlide === i}
                     on:click={() => goToSlide(i)}
                     aria-label="Przejdź do slajdu {i + 1}"
-                />
+                ></button>
             {/each}
         </div>
     </footer>

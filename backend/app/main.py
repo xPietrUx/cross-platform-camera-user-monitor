@@ -24,10 +24,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI()
 
+app = FastAPI(lifespan=lifespan)
+
 # Video Route
 app.include_router(video.router, prefix="/video", tags=["Video"])
-
-app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
