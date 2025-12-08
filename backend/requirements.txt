@@ -1,5 +1,4 @@
 starlette
-pydanhttp://127.0.0.1:8000/docs#/Auth/register_auth_register_posttic
 fastapi[standard]
 numpy
 opencv-python
@@ -7,5 +6,5 @@ sqlmodel
 passlib[bcrypt]
 python-jose[cryptography]
 multipart
-bcrypt==3.2.2\
+bcrypt==3.2.2
 python-dotenv==1.0.0
