@@ -6,28 +6,23 @@ import sys
 import os
 from fastapi.middleware.cors import CORSMiddleware
 
-
-# Dodanie ścieżki do folderu nadrzędnego ('backend'), aby znaleźć moduł 'services'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from db.database import create_db_and_tables, get_session
 from db.models import User
-from routers import video
+from routers import video, auth 
 
-
-# Uruchomienie bazy danych
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     yield
 
 
-app = FastAPI()
-
 app = FastAPI(lifespan=lifespan)
 
-# Video Route
+
 app.include_router(video.router, prefix="/video", tags=["Video"])
+app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,39 +43,12 @@ def home():
 
 
 # --- Użytkownicy ---
-# Dodanie bazy i użytkowników
-@app.post("/users/", response_model=User)
-def create_user(user: User, session: Session = Depends(get_session)):
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return user
-
 
 # Podgląd użytkowników
 @app.get("/users/", response_model=List[User])
 def read_users(session: Session = Depends(get_session)):
     users = session.exec(select(User)).all()
     return users
-
-
-@app.post("/login")
-def login():
-    # Logowanie
-    return {"message": "Zalogowano pomyślnie", "token": "fake-jwt-token"}
-
-
-@app.post("/register")
-def register():
-    # Rejestracja
-    return {"message": "Użytkownik zarejestrowany pomyślnie"}
-
-
-@app.post("/logout")
-def logout():
-    # Wylogowanie
-    return {"message": "Wylogowano pomyślnie"}
-
 
 @app.get("/users/me")
 def get_current_user():
@@ -95,8 +63,6 @@ def update_current_user():
 
 
 # --- Śledzenie ---
-
-
 @app.post("/tracking/session/start")
 def start_tracking_session():
     # Rozpoczyna nową sesję śledzenia aktywności.
@@ -126,7 +92,6 @@ def get_session_details(session_id: str):
 
 # --- Analiza na żywo ---
 
-
 @app.get("/ws/live/events")
 def live_events_placeholder():
 
@@ -134,7 +99,6 @@ def live_events_placeholder():
 
 
 # --- Raporty ---
-
 
 @app.get("/reports/summary")
 def get_summary_report():
@@ -156,8 +120,7 @@ def get_settings():
     # Pobiera aktualne ustawienia aplikacji dla użytkownika.
     return {"notifications": True, "detection_sensitivity": "high"}
 
-
 @app.put("/settings")
 def update_settings():
-    # Aktualizuje ustawienia aplikacji.
+# Aktualizuje ustawienia aplikacji.
     return {"message": "Ustawienia zaktualizowane"}
