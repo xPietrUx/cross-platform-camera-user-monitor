@@ -3,6 +3,9 @@
     import '../app.css';
     import { onMount } from 'svelte';
     import { isCameraPageActive } from '../stores';
+    import { goto } from '$app/navigation';
+    import { page } from '$app/stores';
+    import { browser } from '$app/environment';
 
     // --- Logika Menu ---
     let isMenuExpanded = false;
@@ -29,6 +32,27 @@
         console.log('videoStreamUrl: ' + videoStreamUrl);
         console.log('isVideoLoading: ' + isVideoLoading);
     }
+
+    // --- TO JEST KLUCZOWY FRAGMENT ---
+    // Ten kod wykonuje się automatycznie przy KAŻDEJ zmianie podstrony (kliknięciu w link)
+    $: if (browser && $page.url) {
+        const protectedRoutes = ['/mainpage', '/camera', '/users'];
+        const currentPath = $page.url.pathname;
+
+        // Sprawdź czy wchodzimy na chronioną stronę
+        const isProtected = protectedRoutes.some((route) => currentPath.startsWith(route));
+
+        // Sprawdź czy mamy ciasteczko (po stronie przeglądarki)
+        const hasToken = document.cookie
+            .split(';')
+            .some((item) => item.trim().startsWith('auth_token='));
+
+        // Jeśli strona chroniona i brak tokena -> WYRZUĆ
+        if (isProtected && !hasToken) {
+            goto('/login');
+        }
+    }
+    // ---------------------------------
 </script>
 
 <style>
