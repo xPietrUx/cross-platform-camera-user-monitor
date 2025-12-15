@@ -1,6 +1,7 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-    import { onMount } from 'svelte'; // <--- DODAJ TO
+    import { onMount } from 'svelte';
+    import { accessToken } from '../../stores';
 
     let activeTab: 'login' | 'register' = 'login';
     let errorMessage = '';
@@ -35,12 +36,12 @@
 
             if (response.ok) {
                 const data = await response.json();
-                // Zapisz token w ciasteczku (dostępne dla SSR w hooks.server.ts)
-                // Max-age: 1800s (30 min) zgodnie z ustawieniami backendu
-                document.cookie = `auth_token=${data.access_token}; path=/; max-age=1800; SameSite=Lax`;
+                document.cookie = `access_token=${data.access_token}; path=/; max-age=1800; SameSite=Lax`;
 
-                // Przekieruj na stronę główną po udanym logowaniu
-                goto('/mainpage');
+                // AKTUALIZACJA STORE: Informujemy layout, że mamy nowy token
+                accessToken.set(data.access_token);
+
+                window.location.href = '/mainpage';
             } else {
                 const errorData = await response.json();
                 errorMessage = errorData.detail || 'Błąd logowania';
@@ -90,10 +91,12 @@
     }
 
     function handleLogout() {
-        document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax';
+        document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
+
+        accessToken.set(null);
+
         isLoggedIn = false;
         loggedUserEmail = '';
-        // Opcjonalnie: zostań na stronie logowania, aby zobaczyć formularz
         activeTab = 'login';
     }
 
@@ -104,8 +107,11 @@
     });
 
     function checkLoginStatus() {
-        const token = getCookie('auth_token');
+        const token = getCookie('access_token');
+
+        // Synchronizacja store przy odświeżeniu strony logowania
         if (token) {
+            accessToken.set(token);
             try {
                 // Dekodowanie payloadu JWT (część po kropce)
                 const base64Url = token.split('.')[1];
@@ -128,7 +134,11 @@
                 console.error('Błąd tokena:', e);
                 handleLogout();
             }
+        } else {
+            accessToken.set(null);
         }
+
+        // ...existing code...
     }
 
     function getCookie(name: string) {
