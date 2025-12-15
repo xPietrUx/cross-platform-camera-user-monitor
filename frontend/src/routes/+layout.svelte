@@ -2,10 +2,8 @@
     import '../styles/style.css';
     import '../app.css';
     import { onMount } from 'svelte';
-    import { isCameraPageActive } from '../stores';
-    import { goto } from '$app/navigation';
+    import { isCameraPageActive, accessToken } from '../stores'; // Importujemy accessToken
     import { page } from '$app/stores';
-    import { browser } from '$app/environment';
 
     // --- Logika Menu ---
     let isMenuExpanded = false;
@@ -15,44 +13,33 @@
     }
 
     // --- Logika Kamery ---
+
     let videoStreamUrl: string | null = null;
     let isVideoLoading = true;
 
-    console.log('videoStreamUrl: ' + videoStreamUrl);
-    console.log('isVideoLoading: ' + isVideoLoading);
+    function getCookie(name: string) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift();
+    }
 
     onMount(() => {
-        videoStreamUrl = 'http://127.0.0.1:8000/video/stream';
-        console.log('videoStreamUrl: ' + videoStreamUrl);
-        console.log('isVideoLoading: ' + isVideoLoading);
+        const token = getCookie('access_token');
+        accessToken.set(token || null);
     });
 
-    function handleVideoLoad() {
-        isVideoLoading = !isVideoLoading;
-        console.log('videoStreamUrl: ' + videoStreamUrl);
-        console.log('isVideoLoading: ' + isVideoLoading);
+    $: if ($accessToken) {
+        videoStreamUrl = `http://127.0.0.1:8000/video/stream?token=${$accessToken}`;
+        isVideoLoading = true;
+    } else {
+        videoStreamUrl = null;
     }
 
-    // --- TO JEST KLUCZOWY FRAGMENT ---
-    // Ten kod wykonuje się automatycznie przy KAŻDEJ zmianie podstrony (kliknięciu w link)
-    $: if (browser && $page.url) {
-        const protectedRoutes = ['/mainpage', '/camera', '/users'];
-        const currentPath = $page.url.pathname;
-
-        // Sprawdź czy wchodzimy na chronioną stronę
-        const isProtected = protectedRoutes.some((route) => currentPath.startsWith(route));
-
-        // Sprawdź czy mamy ciasteczko (po stronie przeglądarki)
-        const hasToken = document.cookie
-            .split(';')
-            .some((item) => item.trim().startsWith('auth_token='));
-
-        // Jeśli strona chroniona i brak tokena -> WYRZUĆ
-        if (isProtected && !hasToken) {
-            goto('/login');
+    function handleVideoLoad() {
+        if (videoStreamUrl) {
+            isVideoLoading = false;
         }
     }
-    // ---------------------------------
 </script>
 
 <style>
