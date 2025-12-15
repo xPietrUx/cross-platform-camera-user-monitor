@@ -282,7 +282,7 @@
             <button class="nav-button" on:click={prevSlide} aria-label="Poprzedni slajd"
                 >&#10094;</button
             >
-            <button class="start-button">Rozpocznij monitorowanie</button>
+            <a href="/login" class="start-button">Rozpocznij monitorowanie</a>
             <button class="nav-button" on:click={nextSlide} aria-label="Następny slajd"
                 >&#10095;</button
             >
