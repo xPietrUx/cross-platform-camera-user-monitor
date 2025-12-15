@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 from typing import List
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException, status, Query  # Dodaj Query
+from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
+from jose import JWTError, jwt
 import sys
 import os
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +12,12 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from db.database import create_db_and_tables, get_session
 from db.models import User
-from routers import video, auth 
+from routers import video, auth
+
+# Konfiguracja JWT
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,10 +27,66 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Auth do Endpoint
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
-app.include_router(video.router, prefix="/video", tags=["Video"])
+
+def get_token_from_header_or_query(
+    header_token: str = Depends(oauth2_scheme),
+    query_token: str = Query(None, alias="token"),
+):
+    if header_token:
+        return header_token
+    if query_token:
+        return query_token
+
+    # Jeśli brak obu, rzucamy błąd
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Brak tokena uwierzytelniającego",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def get_current_user(
+    token: str = Depends(get_token_from_header_or_query),  # Używamy nowej funkcji
+    session: Session = Depends(get_session),
+) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Nieprawidłowe dane uwierzytelniające",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # Dekodowanie i weryfikacja podpisu tokena
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    # Pobranie użytkownika z bazy
+    user = session.exec(select(User).where(User.email == email)).first()
+    if user is None:
+        raise credentials_exception
+
+    return user
+
+
+# Routery
+
+# Zabezpieczenie całego routera Video
+app.include_router(
+    video.router,
+    prefix="/video",
+    tags=["Video"],
+    dependencies=[Depends(get_current_user)],
+)
+
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 
+# Poprawna komunikacja z Frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -38,89 +101,28 @@ app.add_middleware(
 
 @app.get("/")
 def home():
-    # Strona powitalna API
     return {"message": "Witaj w API do monitorowania użytkownika."}
 
 
 # --- Użytkownicy ---
 
-# Podgląd użytkowników
+
+# Podgląd użytkowników - wymaga zalogowania
 @app.get("/users/", response_model=List[User])
-def read_users(session: Session = Depends(get_session)):
+def read_users(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     users = session.exec(select(User)).all()
     return users
 
-@app.get("/users/me")
-def get_current_user():
-    # Pobiera dane zalogowanego użytkownika.
-    return {"username": "testuser", "email": "test@example.com"}
+
+@app.get("/users/me", response_model=User)
+def get_current_user_endpoint(current_user: User = Depends(get_current_user)):
+    # Zwraca dane użytkownika wyciągnięte z tokena
+    return current_user
 
 
 @app.put("/users/me")
-def update_current_user():
-    # Aktualizuje dane zalogowanego użytkownika.
-    return {"message": "Dane użytkownika zaktualizowane"}
-
-
-# --- Śledzenie ---
-@app.post("/tracking/session/start")
-def start_tracking_session():
-    # Rozpoczyna nową sesję śledzenia aktywności.
-    return {"message": "Sesja śledzenia rozpoczęta", "session_id": "session123"}
-
-
-@app.post("/tracking/session/stop")
-def stop_tracking_session():
-    # Zatrzymuje bieżącą sesję śledzenia.
-    return {"message": "Sesja śledzenia zakończona"}
-
-
-@app.get("/tracking/sessions", response_model=List[dict])
-def get_tracking_sessions():
-    # Pobiera listę historycznych sesji śledzenia.
-    return [
-        {"session_id": "session123", "duration": 3600},
-        {"session_id": "session456", "duration": 1800},
-    ]
-
-
-@app.get("/tracking/sessions/{session_id}")
-def get_session_details(session_id: str):
-    # Pobiera szczegółowe dane dla konkretnej sesji śledzenia.
-    return {"session_id": session_id, "details": "Szczegółowe dane sesji."}
-
-
-# --- Analiza na żywo ---
-
-@app.get("/ws/live/events")
-def live_events_placeholder():
-
-    return {"message": "Ten endpoint będzie w przyszłości wysyłał zdarzenia na żywo."}
-
-
-# --- Raporty ---
-
-@app.get("/reports/summary")
-def get_summary_report():
-    # Zwraca podsumowanie aktywności użytkownika.
-    return {"summary": "Podsumowanie aktywności z ostatniego tygodnia."}
-
-
-@app.post("/reports")
-def generate_report():
-    # Inicjuje generowanie nowego raportu.
-    return {"message": "Generowanie raportu rozpoczęte", "report_id": "report-xyz"}
-
-
-# --- Ustawienia ---
-
-
-@app.get("/settings")
-def get_settings():
-    # Pobiera aktualne ustawienia aplikacji dla użytkownika.
-    return {"notifications": True, "detection_sensitivity": "high"}
-
-@app.put("/settings")
-def update_settings():
-# Aktualizuje ustawienia aplikacji.
-    return {"message": "Ustawienia zaktualizowane"}
+def update_current_user(current_user: User = Depends(get_current_user)):
+    return {"message": f"Dane użytkownika {current_user.email} zaktualizowane"}
