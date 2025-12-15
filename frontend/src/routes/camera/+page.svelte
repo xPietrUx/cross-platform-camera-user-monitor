@@ -2,12 +2,20 @@
     import { onMount, onDestroy } from 'svelte';
     import { isCameraPageActive } from '../../stores';
 
-    const videoStreamUrl = 'http://127.0.0.1:8000/video/stream';
+    let videoStreamUrl = '';
 
     let isLoading = true;
 
     onMount(() => {
         isCameraPageActive.set(true);
+
+        const token = getCookie('access_token');
+
+        if (token) {
+            videoStreamUrl = `http://127.0.0.1:8000/video/stream?token=${token}`;
+        } else {
+            console.error('Brak tokena dostępu. Użytkownik może być niezalogowany.');
+        }
     });
 
     onDestroy(() => {
@@ -16,6 +24,12 @@
 
     function handleVideoLoad() {
         isLoading = false;
+    }
+
+    function getCookie(name: string) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift();
     }
 </script>
 
@@ -33,7 +47,6 @@
     }
 
     .video-wrapper img {
-        height: 100%;
         width: 100%;
         object-fit: contain;
         border-radius: var(--border-radius);
@@ -76,11 +89,12 @@
             <span>Łączenie z kamerą...</span>
         </div>
     {/if}
-
-    <img
-        src={videoStreamUrl}
-        alt="Strumień wideo z kamery"
-        class:hidden={isLoading}
-        on:load={handleVideoLoad}
-    />
+    {#if videoStreamUrl}
+        <img
+            src={videoStreamUrl}
+            alt="Strumień wideo z kamery"
+            class:hidden={isLoading}
+            on:load={handleVideoLoad}
+        />
+    {/if}
 </div>
