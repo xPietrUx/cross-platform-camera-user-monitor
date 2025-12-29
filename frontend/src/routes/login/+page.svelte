@@ -1,8 +1,150 @@
 <script lang="ts">
+    import { goto } from '$app/navigation';
+    import { onMount } from 'svelte';
+    import { accessToken } from '../../stores';
+
     let activeTab: 'login' | 'register' = 'login';
+    let errorMessage = '';
+
+    // Zmienne do logowania
+    let email = '';
+    let password = '';
+
+    // Zmienne do rejestracji
+    let regName = '';
+    let regEmail = '';
+    let regPassword = '';
+    let regConfirmPassword = '';
+
+    // SCENARIUSZ 1: UŻYTKOWNIK ZALOGOWANY
+    let isLoggedIn = false;
+    let loggedUserEmail = '';
 
     function switchTab(tab: 'login' | 'register') {
         activeTab = tab;
+        errorMessage = '';
+    }
+
+    async function handleLogin() {
+        errorMessage = '';
+        try {
+            const response = await fetch('http://127.0.0.1:8000/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                document.cookie = `access_token=${data.access_token}; path=/; max-age=1800; SameSite=Lax`;
+
+                // AKTUALIZACJA STORE: Informujemy layout, że mamy nowy token
+                accessToken.set(data.access_token);
+
+                window.location.href = '/mainpage';
+            } else {
+                const errorData = await response.json();
+                errorMessage = errorData.detail || 'Błąd logowania';
+            }
+        } catch (e) {
+            console.error(e);
+            errorMessage = 'Nie można połączyć się z serwerem.';
+        }
+    }
+
+    async function handleRegister() {
+        errorMessage = '';
+        if (regPassword !== regConfirmPassword) {
+            errorMessage = 'Hasła nie są identyczne.';
+            return;
+        }
+
+        // Rozdzielenie imienia i nazwiska (prosta logika dla modelu User backendu)
+        const parts = regName.trim().split(' ');
+        const firstName = parts[0];
+        const lastName = parts.length > 1 ? parts.slice(1).join(' ') : 'Brak';
+
+        try {
+            const response = await fetch('http://127.0.0.1:8000/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: regEmail,
+                    password: regPassword,
+                    name: firstName,
+                    surname: lastName,
+                    online_status: false,
+                }),
+            });
+
+            if (response.ok) {
+                alert('Konto utworzone pomyślnie! Możesz się zalogować.');
+                switchTab('login');
+            } else {
+                const errorData = await response.json();
+                errorMessage = errorData.detail || 'Błąd rejestracji';
+            }
+        } catch (e) {
+            console.error(e);
+            errorMessage = 'Nie można połączyć się z serwerem.';
+        }
+    }
+
+    function handleLogout() {
+        document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
+
+        accessToken.set(null);
+
+        isLoggedIn = false;
+        loggedUserEmail = '';
+        activeTab = 'login';
+    }
+
+    // --- DODAJ PONIŻSZY KOD ---
+
+    onMount(() => {
+        checkLoginStatus();
+    });
+
+    function checkLoginStatus() {
+        const token = getCookie('access_token');
+
+        // Synchronizacja store przy odświeżeniu strony logowania
+        if (token) {
+            accessToken.set(token);
+            try {
+                // Dekodowanie payloadu JWT (część po kropce)
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(
+                    window
+                        .atob(base64)
+                        .split('')
+                        .map(function (c) {
+                            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                        })
+                        .join('')
+                );
+
+                const payload = JSON.parse(jsonPayload);
+                // Ustawiamy zmienne, które przełączą widok w HTML
+                loggedUserEmail = payload.sub || 'Użytkownik';
+                isLoggedIn = true;
+            } catch (e) {
+                console.error('Błąd tokena:', e);
+                handleLogout();
+            }
+        } else {
+            accessToken.set(null);
+        }
+
+        // ...existing code...
+    }
+
+    function getCookie(name: string) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift();
     }
 </script>
 
@@ -60,6 +202,10 @@
         transition: all var(--animation-time) var(--animation-type);
         font-weight: var(--font-weight-normal);
         opacity: 0.7;
+        cursor: pointer;
+        color: var(--text-color);
+        background: transparent;
+        border: none;
     }
 
     .tab:hover {
@@ -113,41 +259,6 @@
         box-shadow: 0 0 10px rgba(200, 50, 121, 0.3);
     }
 
-    .form-options {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: var(--spacing-sm);
-        font-size: 0.9rem;
-    }
-
-    .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: var(--spacing-sm);
-        cursor: pointer;
-        user-select: none;
-    }
-
-    .checkbox-label input[type='checkbox'] {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-        accent-color: #c83279;
-    }
-
-    .link {
-        color: #c83279;
-        text-decoration: none;
-        transition: opacity var(--animation-time);
-    }
-
-    .link:hover {
-        opacity: 0.8;
-        text-decoration: underline;
-    }
-
     .submit-button {
         padding: var(--spacing-md) var(--spacing-xl);
         font-size: 1.1rem;
@@ -160,11 +271,52 @@
         transition: all var(--animation-time) ease;
         margin-top: var(--spacing-sm);
         text-align: center;
+        cursor: pointer;
     }
 
     .submit-button:hover {
         transform: translateY(-2px);
         box-shadow: 0 0 20px rgba(200, 50, 121, 0.7);
+    }
+
+    .error-msg {
+        color: #ff4d4d;
+        text-align: center;
+        background: rgba(255, 0, 0, 0.1);
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 0, 0, 0.3);
+    }
+
+    .logged-in-view {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin-top: var(--spacing-lg);
+        width: 100%;
+        text-align: center; /* <--- TO WYŚRODKUJE TEKST I EMAIL */
+        align-items: center; /* <--- TO WYŚRODKUJE PRZYCISKI */
+    }
+
+    .user-email {
+        font-size: 1.2rem;
+        font-weight: var(--font-weight-bold);
+        /* Usuwamy margin-bottom, bo 'gap' w rodzicu to załatwi */
+        color: #c83279;
+    }
+
+    .logout-button {
+        padding: var(--spacing-md) var(--spacing-xl);
+        font-size: 1rem;
+        font-weight: var(--font-weight-bold);
+        color: #fff;
+        background: #e63946;
+        border: none;
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        transition: background 0.3s ease;
+        /* Opcjonalnie: ujednolicenie szerokości z przyciskiem wyżej */
+        width: 100%;
     }
 
     @media (max-width: 640px) {
@@ -175,105 +327,139 @@
         .card-header h1 {
             font-size: 1.75rem;
         }
-
-        .form-options {
-            flex-direction: column;
-            align-items: flex-start;
-        }
     }
 </style>
 
 <div class="login-container">
     <div class="login-card">
-        <header class="card-header">
-            <h1>Zaloguj się lub utwórz nowe konto</h1>
-        </header>
+        {#if isLoggedIn}
+            <!-- SCENARIUSZ 1: UŻYTKOWNIK ZALOGOWANY -->
+            <!-- Zamiast formularza widzi to: -->
+            <header class="card-header">
+                <h1>Witaj ponownie!</h1>
+                <p>Jesteś już zalogowany jako:</p>
+            </header>
 
-        <div class="tabs">
-            <button
-                class="tab"
-                class:active={activeTab === 'login'}
-                on:click={() => switchTab('login')}
-            >
-                Logowanie
-            </button>
-            <button
-                class="tab"
-                class:active={activeTab === 'register'}
-                on:click={() => switchTab('register')}
-            >
-                Rejestracja
-            </button>
-        </div>
-
-        {#if activeTab === 'login'}
-            <form class="form">
-                <div class="form-group">
-                    <label for="login-email">Adres email</label>
-                    <input
-                        type="email"
-                        id="login-email"
-                        placeholder="twoj@email.com"
-                        autocomplete="email"
-                    />
+            <div class="logged-in-view">
+                <div class="user-email">
+                    {loggedUserEmail}
                 </div>
 
-                <div class="form-group">
-                    <label for="login-password">Hasło</label>
-                    <input
-                        type="password"
-                        id="login-password"
-                        placeholder="••••••••"
-                        autocomplete="current-password"
-                    />
-                </div>
+                <button class="submit-button" on:click={() => goto('/mainpage')}>
+                    Przejdź do Panelu
+                </button>
 
-                <button type="submit" class="submit-button"> Zaloguj się </button>
-            </form>
+                <button class="logout-button" on:click={handleLogout}> Wyloguj się </button>
+            </div>
         {:else}
-            <form class="form">
-                <div class="form-group">
-                    <label for="register-name">Imię i nazwisko</label>
-                    <input
-                        type="text"
-                        id="register-name"
-                        placeholder="Jan Kowalski"
-                        autocomplete="name"
-                    />
-                </div>
+            <!-- SCENARIUSZ 2: UŻYTKOWNIK NIEZALOGOWANY -->
+            <!-- Widzi normalne formularze -->
+            <header class="card-header">
+                <h1>Zaloguj się lub utwórz nowe konto</h1>
+            </header>
 
-                <div class="form-group">
-                    <label for="register-email">Adres email</label>
-                    <input
-                        type="email"
-                        id="register-email"
-                        placeholder="twoj@email.com"
-                        autocomplete="email"
-                    />
-                </div>
+            <div class="tabs">
+                <button
+                    class="tab"
+                    class:active={activeTab === 'login'}
+                    on:click={() => switchTab('login')}
+                >
+                    Logowanie
+                </button>
+                <button
+                    class="tab"
+                    class:active={activeTab === 'register'}
+                    on:click={() => switchTab('register')}
+                >
+                    Rejestracja
+                </button>
+            </div>
 
-                <div class="form-group">
-                    <label for="register-password">Hasło</label>
-                    <input
-                        type="password"
-                        id="register-password"
-                        placeholder="••••••••"
-                        autocomplete="new-password"
-                    />
-                </div>
+            {#if errorMessage}
+                <div class="error-msg">{errorMessage}</div>
+            {/if}
 
-                <div class="form-group">
-                    <label for="register-password-confirm">Potwierdź hasło</label>
-                    <input
-                        type="password"
-                        id="register-password-confirm"
-                        placeholder="••••••••"
-                        autocomplete="new-password"
-                    />
-                </div>
+            {#if activeTab === 'login'}
+                <form class="form" on:submit|preventDefault={handleLogin}>
+                    <div class="form-group">
+                        <label for="login-email">Adres email</label>
+                        <input
+                            type="email"
+                            id="login-email"
+                            placeholder="twoj@email.com"
+                            autocomplete="email"
+                            required
+                            bind:value={email}
+                        />
+                    </div>
 
-                <button type="submit" class="submit-button"> Utwórz konto </button>
-            </form>
+                    <div class="form-group">
+                        <label for="login-password">Hasło</label>
+                        <input
+                            type="password"
+                            id="login-password"
+                            placeholder="••••••••"
+                            autocomplete="current-password"
+                            required
+                            bind:value={password}
+                        />
+                    </div>
+
+                    <button type="submit" class="submit-button"> Zaloguj się </button>
+                </form>
+            {:else}
+                <form class="form" on:submit|preventDefault={handleRegister}>
+                    <div class="form-group">
+                        <label for="register-name">Imię i nazwisko</label>
+                        <input
+                            type="text"
+                            id="register-name"
+                            placeholder="Jan Kowalski"
+                            autocomplete="name"
+                            required
+                            bind:value={regName}
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="register-email">Adres email</label>
+                        <input
+                            type="email"
+                            id="register-email"
+                            placeholder="twoj@email.com"
+                            autocomplete="email"
+                            required
+                            bind:value={regEmail}
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="register-password">Hasło</label>
+                        <input
+                            type="password"
+                            id="register-password"
+                            placeholder="••••••••"
+                            autocomplete="new-password"
+                            required
+                            bind:value={regPassword}
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="register-password-confirm">Potwierdź hasło</label>
+                        <input
+                            type="password"
+                            id="register-password-confirm"
+                            placeholder="••••••••"
+                            autocomplete="new-password"
+                            required
+                            bind:value={regConfirmPassword}
+                        />
+                    </div>
+
+                    <button type="submit" class="submit-button"> Utwórz konto </button>
+                </form>
+            {/if}
         {/if}
     </div>
 </div>

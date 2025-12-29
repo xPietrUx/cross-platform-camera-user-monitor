@@ -2,7 +2,8 @@
     import '../styles/style.css';
     import '../app.css';
     import { onMount } from 'svelte';
-    import { isCameraPageActive } from '../stores';
+    import { isCameraPageActive, accessToken } from '../stores'; // Importujemy accessToken
+    import { page } from '$app/stores';
 
     // --- Logika Menu ---
     let isMenuExpanded = false;
@@ -12,22 +13,32 @@
     }
 
     // --- Logika Kamery ---
+
     let videoStreamUrl: string | null = null;
     let isVideoLoading = true;
 
-    console.log('videoStreamUrl: ' + videoStreamUrl);
-    console.log('isVideoLoading: ' + isVideoLoading);
+    function getCookie(name: string) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop()?.split(';').shift();
+    }
 
     onMount(() => {
-        videoStreamUrl = 'http://127.0.0.1:8000/video/stream';
-        console.log('videoStreamUrl: ' + videoStreamUrl);
-        console.log('isVideoLoading: ' + isVideoLoading);
+        const token = getCookie('access_token');
+        accessToken.set(token || null);
     });
 
+    $: if ($accessToken) {
+        videoStreamUrl = `http://127.0.0.1:8000/video/stream?token=${$accessToken}`;
+        isVideoLoading = true;
+    } else {
+        videoStreamUrl = null;
+    }
+
     function handleVideoLoad() {
-        isVideoLoading = !isVideoLoading;
-        console.log('videoStreamUrl: ' + videoStreamUrl);
-        console.log('isVideoLoading: ' + isVideoLoading);
+        if (videoStreamUrl) {
+            isVideoLoading = false;
+        }
     }
 </script>
 
