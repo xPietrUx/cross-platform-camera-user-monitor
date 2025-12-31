@@ -36,12 +36,20 @@
 
             if (response.ok) {
                 const data = await response.json();
-                document.cookie = `access_token=${data.access_token}; path=/; max-age=1800; SameSite=Lax`;
+                
+                // 1. Wyczyść stare ciasteczka
+                document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
+                document.cookie = 'access_token=; max-age=0; SameSite=Lax';
 
-                // AKTUALIZACJA STORE: Informujemy layout, że mamy nowy token
+                // 2. Ustaw nowe ciasteczko na 24h (86400 sekund)
+                // ZMIANA: max-age=1800 -> max-age=86400
+                document.cookie = `access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
+
+                // 3. Zaktualizuj store
                 accessToken.set(data.access_token);
 
-                window.location.href = '/mainpage';
+                // 4. Użyj goto zamiast window.location.href
+                await goto('/mainpage');
             } else {
                 const errorData = await response.json();
                 errorMessage = errorData.detail || 'Błąd logowania';
@@ -137,8 +145,6 @@
         } else {
             accessToken.set(null);
         }
-
-        // ...existing code...
     }
 
     function getCookie(name: string) {
