@@ -47,7 +47,7 @@ class AuthService:
             )
 
         ACCESS_TOKEN_EXPIRE_MINUTES = int(
-            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"), 1440
+            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
         )
 
         # Generowanie tokenu
