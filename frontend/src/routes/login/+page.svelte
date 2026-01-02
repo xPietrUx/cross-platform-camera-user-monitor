@@ -36,7 +36,7 @@
 
             if (response.ok) {
                 const data = await response.json();
-                
+
                 // 1. Wyczyść stare ciasteczka
                 document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
                 document.cookie = 'access_token=; max-age=0; SameSite=Lax';
@@ -67,7 +67,7 @@
             return;
         }
 
-        // Rozdzielenie imienia i nazwiska (prosta logika dla modelu User backendu)
+        // Rozdzielenie imienia i nazwiska (prosta logika dla modelu User backend)
         const parts = regName.trim().split(' ');
         const firstName = parts[0];
         const lastName = parts.length > 1 ? parts.slice(1).join(' ') : 'Brak';
@@ -98,7 +98,22 @@
         }
     }
 
-    function handleLogout() {
+    async function handleLogout() {
+        try {
+            const token = getCookie('access_token');
+            if (token) {
+                await fetch('http://127.0.0.1:8000/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+            }
+        } catch (e) {
+            console.error('Błąd podczas wylogowywania z serwera:', e);
+        }
+
         document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
 
         accessToken.set(null);
@@ -107,8 +122,6 @@
         loggedUserEmail = '';
         activeTab = 'login';
     }
-
-    // --- DODAJ PONIŻSZY KOD ---
 
     onMount(() => {
         checkLoginStatus();
@@ -121,7 +134,7 @@
         if (token) {
             accessToken.set(token);
             try {
-                // Dekodowanie payloadu JWT (część po kropce)
+                // Dekodowanie payload JWT (część po kropce)
                 const base64Url = token.split('.')[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
                 const jsonPayload = decodeURIComponent(
