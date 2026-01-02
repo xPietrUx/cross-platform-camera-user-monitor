@@ -9,6 +9,7 @@ class User(SQLModel, table=True):
     email: str
     online_status: bool
     password: str
+    created_at: str
 
 
 class FocusLog(SQLModel, table=True):
