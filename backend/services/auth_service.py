@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 from sqlmodel import Session, select
 from fastapi import HTTPException, status
@@ -27,6 +28,11 @@ class AuthService:
         hashed_password = get_password_hash(user.password)
         user.password = hashed_password
 
+        current_dateTime = datetime.now()
+        date_slash = current_dateTime.strftime("%x")
+        date_proper = date_slash.replace("/", ".")
+        user.created_at = date_proper
+
         # Zapisz w bazie
         session.add(user)
         session.commit()
@@ -46,6 +52,11 @@ class AuthService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        user.online_status = True
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
         ACCESS_TOKEN_EXPIRE_MINUTES = int(
             os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
         )
@@ -57,3 +68,10 @@ class AuthService:
         )
 
         return {"access_token": access_token, "token_type": "bearer"}
+
+    def logout_user(self, user: User, session: Session):
+        user.online_status = False
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return {"message": "Successfully logged out"}
