@@ -1,35 +1,17 @@
 <script lang="ts">
+    import type { PageData } from './$types';
+
+    export let data: PageData;
+
     interface User {
         id: number;
         name: string;
         email: string;
-        createdAt: string;
-        isOnline: boolean;
+        created_at: string;
+        online_status: boolean;
     }
 
-    const users: User[] = [
-        {
-            id: 1,
-            name: 'Jan Kowalski',
-            email: 'jan.kowalski@example.com',
-            createdAt: '2024-01-15',
-            isOnline: true,
-        },
-        {
-            id: 2,
-            name: 'Anna Nowak',
-            email: 'anna.nowak@example.com',
-            createdAt: '2024-02-20',
-            isOnline: false,
-        },
-        {
-            id: 3,
-            name: 'Piotr Wiśniewski',
-            email: 'piotr.wisniewski@example.com',
-            createdAt: '2024-03-10',
-            isOnline: true,
-        },
-    ];
+    $: users = data.users as User[];
 </script>
 
 <style>
@@ -195,11 +177,11 @@
                     </div>
                     <div
                         class="user-status"
-                        class:online={user.isOnline}
-                        class:offline={!user.isOnline}
+                        class:online={user.online_status}
+                        class:offline={!user.online_status}
                     >
                         <span class="status-dot"></span>
-                        <span class="status-text">{user.isOnline ? 'Online' : 'Offline'}</span>
+                        <span class="status-text">{user.online_status ? 'Online' : 'Offline'}</span>
                     </div>
                 </div>
 
@@ -235,8 +217,7 @@
                             <line x1="8" y1="2" x2="8" y2="6" />
                             <line x1="3" y1="10" x2="21" y2="10" />
                         </svg>
-                        <span>Dołączył: {new Date(user.createdAt).toLocaleDateString('pl-PL')}</span
-                        >
+                        <span>Dołączył: {user.created_at}</span>
                     </div>
                 </div>
             </div>
