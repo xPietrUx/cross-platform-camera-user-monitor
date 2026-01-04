@@ -57,12 +57,12 @@ class AuthService:
         session.commit()
         session.refresh(user)
 
-        ACCESS_TOKEN_EXPIRE_MINUTES = int(
-            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"), 1440
+        access_token_expires_minutes = int(
+            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(ACCESS_TOKEN_EXPIRE_MINUTES))
         )
 
         # Generowanie tokenu
-        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token_expires = timedelta(minutes=access_token_expires_minutes)
         access_token = create_access_token(
             data={"sub": user.email}, expires_delta=access_token_expires
         )
