@@ -13,7 +13,7 @@ from utils.security import (
 
 class AuthService:
     def register_user(self, user: User, session: Session) -> User:
-        # Sprawdź czy email już istnieje
+        # Sprawdź czy email już istniejehttp://localhost:5173/
         statement = select(User).where(User.email == user.email)
         existing_user = session.exec(statement).first()
 
@@ -47,7 +47,7 @@ class AuthService:
             )
 
         ACCESS_TOKEN_EXPIRE_MINUTES = int(
-            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
+            os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"), 1440
         )
 
         # Generowanie tokenu
