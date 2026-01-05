@@ -5,6 +5,7 @@
 
     let activeTab: 'login' | 'register' = 'login';
     let errorMessage = '';
+    let successMessage = ''; // NOWE: Zmienna na komunikat sukcesu
 
     // Zmienne do logowania
     let email = '';
@@ -23,10 +24,12 @@
     function switchTab(tab: 'login' | 'register') {
         activeTab = tab;
         errorMessage = '';
+        successMessage = ''; // Czyścimy komunikaty przy zmianie zakładki
     }
 
     async function handleLogin() {
         errorMessage = '';
+        successMessage = ''; // Czyścimy sukces przy próbie logowania
         try {
             const response = await fetch('http://127.0.0.1:8000/auth/login', {
                 method: 'POST',
@@ -42,7 +45,6 @@
                 document.cookie = 'access_token=; max-age=0; SameSite=Lax';
 
                 // 2. Ustaw nowe ciasteczko na 24h (86400 sekund)
-                // ZMIANA: max-age=1800 -> max-age=86400
                 document.cookie = `access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
 
                 // 3. Zaktualizuj store
@@ -62,6 +64,8 @@
 
     async function handleRegister() {
         errorMessage = '';
+        successMessage = '';
+        
         if (regPassword !== regConfirmPassword) {
             errorMessage = 'Hasła nie są identyczne.';
             return;
@@ -86,8 +90,9 @@
             });
 
             if (response.ok) {
-                alert('Konto utworzone pomyślnie! Możesz się zalogować.');
+                // POPRAWKA: Zamiast alert(), przełączamy zakładkę i ustawiamy wiadomość
                 switchTab('login');
+                successMessage = 'Konto utworzone pomyślnie! Możesz się zalogować.';
             } else {
                 const errorData = await response.json();
                 errorMessage = errorData.detail || 'Błąd rejestracji';
@@ -121,6 +126,7 @@
         isLoggedIn = false;
         loggedUserEmail = '';
         activeTab = 'login';
+        successMessage = '';
     }
 
     onMount(() => {
@@ -307,20 +313,29 @@
         border: 1px solid rgba(255, 0, 0, 0.3);
     }
 
+    /* NOWE: Style dla komunikatu sukcesu */
+    .success-msg {
+        color: #28a745;
+        text-align: center;
+        background: rgba(40, 167, 69, 0.1);
+        padding: 10px;
+        border-radius: 4px;
+        border: 1px solid rgba(40, 167, 69, 0.3);
+    }
+
     .logged-in-view {
         display: flex;
         flex-direction: column;
         gap: 20px;
         margin-top: var(--spacing-lg);
         width: 100%;
-        text-align: center; /* <--- TO WYŚRODKUJE TEKST I EMAIL */
-        align-items: center; /* <--- TO WYŚRODKUJE PRZYCISKI */
+        text-align: center;
+        align-items: center;
     }
 
     .user-email {
         font-size: 1.2rem;
         font-weight: var(--font-weight-bold);
-        /* Usuwamy margin-bottom, bo 'gap' w rodzicu to załatwi */
         color: #c83279;
     }
 
@@ -334,7 +349,6 @@
         border-radius: var(--border-radius-sm);
         cursor: pointer;
         transition: background 0.3s ease;
-        /* Opcjonalnie: ujednolicenie szerokości z przyciskiem wyżej */
         width: 100%;
     }
 
@@ -353,7 +367,6 @@
     <div class="login-card">
         {#if isLoggedIn}
             <!-- SCENARIUSZ 1: UŻYTKOWNIK ZALOGOWANY -->
-            <!-- Zamiast formularza widzi to: -->
             <header class="card-header">
                 <h1>Witaj ponownie!</h1>
                 <p>Jesteś już zalogowany jako:</p>
@@ -372,7 +385,6 @@
             </div>
         {:else}
             <!-- SCENARIUSZ 2: UŻYTKOWNIK NIEZALOGOWANY -->
-            <!-- Widzi normalne formularze -->
             <header class="card-header">
                 <h1>Zaloguj się lub utwórz nowe konto</h1>
             </header>
@@ -396,6 +408,11 @@
 
             {#if errorMessage}
                 <div class="error-msg">{errorMessage}</div>
+            {/if}
+
+            <!-- NOWE: Wyświetlanie komunikatu sukcesu -->
+            {#if successMessage}
+                <div class="success-msg">{successMessage}</div>
             {/if}
 
             {#if activeTab === 'login'}
