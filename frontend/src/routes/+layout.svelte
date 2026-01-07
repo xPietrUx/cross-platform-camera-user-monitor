@@ -2,7 +2,7 @@
     import '../styles/style.css';
     import '../app.css';
     import { onMount } from 'svelte';
-    import { isCameraPageActive, accessToken } from '../stores'; // Importujemy accessToken
+    import { isCameraPageActive, accessToken } from '../stores';
     import { page } from '$app/stores';
 
     // --- Logika Menu ---
@@ -39,6 +39,47 @@
         if (videoStreamUrl) {
             isVideoLoading = false;
         }
+    }
+
+    // --- Logika wyboru kamery (sidebar) ---
+    let videoDevices: MediaDeviceInfo[] = [];
+    let selectedDeviceId = '';
+    let cameraError = '';
+    let isLoadingDevices = false;
+
+    async function loadCameraDevices() {
+        if (isLoadingDevices) return;
+        isLoadingDevices = true;
+        cameraError = '';
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            videoDevices = devices.filter((d) => d.kind === 'videoinput');
+            if (!selectedDeviceId && videoDevices.length) {
+                selectedDeviceId = videoDevices[0].deviceId;
+            }
+        } catch (e) {
+            cameraError = 'Nie udało się pobrać listy kamer.';
+            console.error(e);
+        } finally {
+            isLoadingDevices = false;
+        }
+    }
+
+    async function selectCamera(deviceId: string) {
+        selectedDeviceId = deviceId;
+        try {
+            await fetch('http://127.0.0.1:8000/video/cameras/select', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId })
+            });
+        } catch (e) {
+            console.error('Błąd wyboru kamery:', e);
+        }
+    }
+
+    $: if ($isCameraPageActive && videoDevices.length === 0 && !isLoadingDevices) {
+        loadCameraDevices();
     }
 </script>
 
@@ -262,6 +303,62 @@
             right: 10px;
         }
     }
+
+    /* --- Style dla wyboru kamery --- */
+    .camera-selector {
+        margin-top: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: var(--border-radius-sm);
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+
+    .camera-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        color: white;
+    }
+
+    .camera-icon {
+        flex-shrink: 0;
+        color: white;
+    }
+
+    .camera-selector label {
+        font-weight: bold;
+        color: white;
+    }
+
+    .camera-error {
+        color: #d10e0e;
+        font-size: 0.9rem;
+        text-align: center;
+    }
+
+    select {
+        padding: var(--spacing-sm);
+        border: var(--border);
+        border-radius: var(--border-radius-sm);
+        background-color: rgba(255, 255, 255, 0.2);
+        color: white;
+        font-size: 1rem;
+        appearance: none;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    select:hover {
+        background-color: rgba(255, 255, 255, 0.3);
+    }
+
+    select:focus {
+        outline: none;
+        border-color: #007bff;
+        background-color: rgba(255, 255, 255, 0.3);
+    }
 </style>
 
 <!-- Sidebar Nav -->
@@ -367,6 +464,47 @@
                 </a>
             </li>
         </ul>
+
+        {#if $isCameraPageActive}
+            <div class="camera-selector">
+                <div class="camera-header">
+                    <svg
+                        class="camera-icon"
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <!-- Ikona nagrywania: okrąg w obrysie -->
+                        <circle cx="12" cy="12" r="8" />
+                        <circle cx="12" cy="12" r="4" fill="currentColor" />
+                    </svg>
+                    {#if isMenuExpanded}
+                        <span>Wybierz kamerę</span>
+                    {/if}
+                </div>
+
+                {#if isMenuExpanded}
+                    {#if cameraError}
+                        <div class="camera-error">{cameraError}</div>
+                    {:else if videoDevices.length === 0}
+                        <div class="camera-error">Brak wykrytych kamer.</div>
+                    {:else}
+                        <select
+                            id="camera-select"
+                            bind:value={selectedDeviceId}
+                            on:change={(e) => selectCamera((e.target as HTMLSelectElement).value)}
+                        >
+                            {#each videoDevices as cam}
+                                <option value={cam.deviceId}>{cam.label || 'Kamera ' + cam.deviceId}</option>
+                            {/each}
+                        </select>
+                    {/if}
+                {/if}
+            </div>
+        {/if}
     </nav>
 
     <main class="content">

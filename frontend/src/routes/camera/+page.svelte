@@ -3,18 +3,13 @@
     import { isCameraPageActive } from '../../stores';
 
     let videoStreamUrl = '';
-
     let isLoading = true;
 
     onMount(() => {
         isCameraPageActive.set(true);
-
         const token = getCookie('access_token');
-
         if (token) {
             videoStreamUrl = `http://127.0.0.1:8000/video/stream?token=${token}`;
-        } else {
-            console.error('Brak tokena dostępu. Użytkownik może być niezalogowany.');
         }
     });
 
@@ -80,6 +75,8 @@
             transform: rotate(360deg);
         }
     }
+
+
 </style>
 
 <div class="video-wrapper">
@@ -98,3 +95,5 @@
         />
     {/if}
 </div>
+
+
