@@ -67,5 +67,52 @@
     "dependencies": {
         "frappe-charts": "^1.6.2",
         "svelte-frappe-charts": "^2.0.0"
+    },
+    "build": {
+        "appId": "com.cameramonitor.app",
+        "productName": "Camera User Monitor",
+        "directories": {
+            "output": "dist-electron"
+        },
+        "files": [
+            "build/**/*",
+            "electron/**/*",
+            "package.json"
+        ],
+        "win": {
+            "target": "nsis",
+            "icon": "static/icon.ico",
+            "extraResources": [
+                {
+                    "from": "../backend/dist/win/api.exe",
+                    "to": "api.exe"
+                }
+            ]
+        },
+        "mac": {
+            "target": [
+                "dmg",
+                "zip"
+            ],
+            "category": "public.app-category.productivity",
+            "icon": "static/icon.icns",
+            "extraResources": [
+                {
+                    "from": "../backend/dist/mac/api",
+                    "to": "api"
+                }
+            ]
+        },
+        "linux": {
+            "target": "AppImage",
+            "category": "Utility",
+            "icon": "static/icon.png",
+            "extraResources": [
+                {
+                    "from": "../backend/dist/linux/api",
+                    "to": "api"
+                }
+            ]
+        }
     }
 }

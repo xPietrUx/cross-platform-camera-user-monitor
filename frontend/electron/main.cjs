@@ -1,7 +1,39 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
+const { spawn } = require('child_process');
+
+app.disableHardwareAcceleration();
 
 const isDev = !app.isPackaged;
+let backendProcess = null;
+
+function startBackend() {
+    if (isDev) {
+        console.log('Tryb DEV: Uruchom backend ręcznie lub odkomentuj kod w main.cjs');
+    } else {
+        // WYKRYWANIE NAZWY PLIKU ZALEŻNIE OD PLATFORMY
+        let executableName = 'api';
+        if (process.platform === 'win32') {
+            executableName = 'api.exe';
+        }
+
+        const backendPath = path.join(process.resourcesPath, executableName);
+
+        console.log('Uruchamianie backendu z:', backendPath);
+
+        backendProcess = spawn(backendPath, [], {
+            cwd: process.resourcesPath, // Ustaw katalog roboczy, żeby baza SQLite tworzyła się obok exe
+        });
+
+        backendProcess.stdout.on('data', (data) => {
+            console.log(`Backend stdout: ${data}`);
+        });
+
+        backendProcess.stderr.on('data', (data) => {
+            console.error(`Backend stderr: ${data}`);
+        });
+    }
+}
 
 function createWindow() {
     const win = new BrowserWindow({
@@ -12,7 +44,6 @@ function createWindow() {
             contextIsolation: true,
             nodeIntegration: false,
         },
-        autoHideMenuBar: !isDev,
     });
 
     if (isDev) {
@@ -27,7 +58,19 @@ function createWindow() {
     });
 }
 
-app.whenReady().then(createWindow);
+// Uruchom backend przy starcie Electrona
+app.whenReady().then(() => {
+    startBackend(); // <--- WYWOŁANIE FUNKCJI
+    createWindow();
+});
+
+// Zabij backend przy zamykaniu aplikacji
+app.on('will-quit', () => {
+    if (backendProcess) {
+        backendProcess.kill();
+        backendProcess = null;
+    }
+});
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
