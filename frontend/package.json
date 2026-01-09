@@ -1,7 +1,9 @@
 {
-    "name": "crossplatfromcamera",
+    "name": "cross-platform-camera",
     "private": true,
     "version": "0.0.1",
+    "description": "Aplikacja do monitorowania efektywności klienta",
+    "author": "Piotr Dusinski, Patryk Straszok, Arkadiusz Kolodziejczyk ",
     "type": "module",
     "main": "electron/main.cjs",
     "scripts": {
@@ -35,7 +37,7 @@
     },
     "build": {
         "appId": "com.cameramonitor.app",
-        "productName": "Camera User Monitor",
+        "productName": "Cross Platform Camera",
         "directories": {
             "output": "dist-electron"
         },
