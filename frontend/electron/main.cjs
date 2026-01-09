@@ -1,6 +1,9 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
+app.disableHardwareAcceleration();
+
+// Sprawdzenie, czy aplikacja jest w trybie deweloperskim, czy produkcyjnym
 const isDev = !app.isPackaged;
 
 function createWindow() {

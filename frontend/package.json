@@ -1,5 +1,6 @@
 {
-    "name": "frontend",
+    "name": "cross-platform-camera",
+    "productName": "Cross Platform Camera",
     "private": true,
     "version": "0.0.1",
     "type": "module",
