@@ -1,5 +1,5 @@
 {
-    "name": "frontend",
+    "name": "crossplatfromcamera",
     "private": true,
     "version": "0.0.1",
     "type": "module",
@@ -13,41 +13,6 @@
         "prepare": "svelte-kit sync || echo ''",
         "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
         "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
-    },
-    "build": {
-        "appId": "com.yourcompany.camera-monitor",
-        "productName": "Camera User Monitor",
-        "directories": {
-            "output": "dist-electron"
-        },
-        "files": [
-            "build/**/*",
-            "electron/**/*",
-            "package.json"
-        ],
-        "win": {
-            "target": [
-                "nsis",
-                "portable"
-            ],
-            "icon": "static/icon.ico"
-        },
-        "mac": {
-            "target": [
-                "dmg",
-                "zip"
-            ],
-            "category": "public.app-category.productivity",
-            "icon": "static/icon.icns"
-        },
-        "linux": {
-            "target": [
-                "AppImage",
-                "deb"
-            ],
-            "category": "Utility",
-            "icon": "static/icon.png"
-        }
     },
     "devDependencies": {
         "@sveltejs/adapter-static": "^3.0.10",
