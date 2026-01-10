@@ -9,7 +9,7 @@
     "scripts": {
         "dev": "vite dev",
         "dev-electron": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-        "build": "vite build",
+        "build": "svelte-kit sync && vite build && node fix-paths.cjs",
         "build-electron": "npm run build && electron-builder",
         "preview": "vite preview",
         "prepare": "svelte-kit sync || echo ''",
@@ -33,7 +33,8 @@
     },
     "dependencies": {
         "frappe-charts": "^1.6.2",
-        "svelte-frappe-charts": "^2.0.0"
+        "svelte-frappe-charts": "^2.0.0",
+        "tree-kill": "^1.2.2"
     },
     "build": {
         "appId": "com.cameramonitor.app",
@@ -44,15 +45,26 @@
         "files": [
             "build/**/*",
             "electron/**/*",
-            "package.json"
+            "!node_modules",
+            "!src",
+            "!**/.svelte-kit"
         ],
+        "asar": true,
+        "extraMetadata": {
+            "main": "electron/main.cjs"
+        },
         "win": {
             "target": "nsis",
             "icon": "static/icon.ico",
+            "signAndEditExecutable": false,
             "extraResources": [
                 {
                     "from": "../backend/dist/win/api.exe",
                     "to": "api.exe"
+                },
+                {
+                    "from": "../.env",
+                    "to": ".env"
                 }
             ]
         },
@@ -67,6 +79,10 @@
                 {
                     "from": "../backend/dist/mac/api",
                     "to": "api"
+                },
+                {
+                    "from": "../.env",
+                    "to": ".env"
                 }
             ]
         },
@@ -78,6 +94,10 @@
                 {
                     "from": "../backend/dist/linux/api",
                     "to": "api"
+                },
+                {
+                    "from": "../.env",
+                    "to": ".env"
                 }
             ]
         }

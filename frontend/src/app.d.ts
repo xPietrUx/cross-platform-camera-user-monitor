@@ -1,9 +1,10 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 
-declare module 'svelte-frappe-charts' {
-    import { SvelteComponent } from 'svelte';
-    export class Chart extends SvelteComponent {}
+declare module 'frappe-charts/dist/frappe-charts.min.esm' {
+    export class Chart {
+        constructor(element: HTMLElement, options: any);
+    }
 }
 
 declare global {

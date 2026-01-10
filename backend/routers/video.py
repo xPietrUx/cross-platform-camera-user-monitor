@@ -1,15 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from typing import List
 from sqlmodel import Session, select
 from services import video_processor
+from dependencies import get_current_user
 from db.database import get_session
 from db.models import FocusLog, User, DistractionStat
 from collections import defaultdict
 from datetime import datetime, timedelta
-
-# Importujemy zależność z nowego pliku
-from dependencies import get_current_user
 
 router = APIRouter()
 
@@ -33,16 +31,30 @@ def select_camera():
 def video_stream(current_user: User = Depends(get_current_user)):
     """
     Endpoint do streamingu. Wymaga tokena (przekazywanego w URL ?token=...).
-    Przekazuje ID użytkownika do procesora wideo.
     """
+    user_id = current_user.id
+
+    if not video_processor.start_user_stream(user_id=user_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Masz już otwarty strumień w innej karcie/oknie.",
+        )
+
     try:
         return StreamingResponse(
-            # Przekazujemy ID zalogowanego użytkownika
-            video_processor.generate_frames(user_id=current_user.id),
+            video_processor.generate_frames(user_id=user_id),
             media_type="multipart/x-mixed-replace; boundary=frame",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
         )
-    except RuntimeError as e:
-        return {"error": str(e)}
+    except Exception:
+        video_processor.end_user_stream(user_id=user_id)
+        raise
 
 
 @router.get("/stats")

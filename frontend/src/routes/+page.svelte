@@ -1,7 +1,15 @@
 <script lang="ts">
     import { onMount } from 'svelte';
+    import { goto } from '$app/navigation';
+    import { accessToken } from '../stores';
+    import { getCookie } from '$lib/utils';
 
     let currentSlide = 0;
+
+    // DODAJ te zmienne (używane w checkLoginStatus)
+    let isLoggedIn = false;
+    let loggedUserEmail = '';
+
     const slides = [
         {
             title: 'Monitorowanie w Czasie Rzeczywistym',
@@ -35,12 +43,10 @@
 
     let interval: ReturnType<typeof setInterval>;
 
-    // Funkcja do automatycznego przełączania slajdów
     function autoNextSlide() {
         currentSlide = (currentSlide + 1) % slides.length;
     }
 
-    // Funkcja resetująca timer
     function resetTimer() {
         clearInterval(interval);
         interval = setInterval(autoNextSlide, 5000);
@@ -48,24 +54,66 @@
 
     function nextSlide() {
         currentSlide = (currentSlide + 1) % slides.length;
-        resetTimer(); // Resetuj timer
+        resetTimer();
     }
 
     function prevSlide() {
         currentSlide = (currentSlide - 1 + slides.length) % slides.length;
-        resetTimer(); // Resetuj timer
+        resetTimer();
     }
 
     function goToSlide(index: number) {
         currentSlide = index;
-        resetTimer(); // Resetuj timer
+        resetTimer();
     }
 
     onMount(() => {
-        // Uruchom timer po załadowaniu komponentu
         interval = setInterval(autoNextSlide, 5000);
+        checkLoginStatus(); // <--- PRZENIEŚ TUTAJ (wywołaj w onMount)
         return () => clearInterval(interval);
     });
+
+    function goLogin(e: MouseEvent) {
+        e.preventDefault();
+        goto('/login');
+    }
+
+    function checkLoginStatus() {
+        const token = getCookie('access_token');
+
+        if (token) {
+            accessToken.set(token);
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(
+                    window
+                        .atob(base64)
+                        .split('')
+                        .map(function (c) {
+                            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                        })
+                        .join('')
+                );
+
+                const payload = JSON.parse(jsonPayload);
+                const now = Math.floor(Date.now() / 1000);
+
+                if (payload.exp && payload.exp > now) {
+                    loggedUserEmail = payload.sub || 'Użytkownik';
+                    isLoggedIn = true;
+                } else {
+                    isLoggedIn = false;
+                }
+            } catch (e) {
+                console.error('Błąd tokena:', e);
+                isLoggedIn = false;
+            }
+        } else {
+            accessToken.set(null);
+            isLoggedIn = false;
+        }
+    }
 </script>
 
 <style>
@@ -282,7 +330,7 @@
             <button class="nav-button" on:click={prevSlide} aria-label="Poprzedni slajd"
                 >&#10094;</button
             >
-            <a href="/login" class="start-button">Rozpocznij monitorowanie</a>
+            <a href="/login" class="start-button" on:click={goLogin}>Rozpocznij monitorowanie</a>
             <button class="nav-button" on:click={nextSlide} aria-label="Następny slajd"
                 >&#10095;</button
             >

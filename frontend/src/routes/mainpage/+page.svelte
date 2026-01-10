@@ -1,49 +1,91 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import type { PageData } from './$types';
+    import { goto } from '$app/navigation';
+    import { accessToken } from '../../stores';
+    import { getCookie } from '$lib/utils';
 
-    const { data } = $props<{ data: PageData }>();
-    const { focusData, productivityData, activityData } = data;
+    type ChartData = {
+        labels: string[];
+        datasets: Array<{ name: string; values: number[] }>;
+    };
+
+    let focusData: ChartData | null = null;
+    let productivityData: ChartData | null = null;
+    let activityData: ChartData | null = null;
 
     let focusChartRef: HTMLElement;
     let prodChartRef: HTMLElement;
     let activityChartRef: HTMLElement;
 
+    let error: string | null = null;
+    let loading = true;
+
+    async function authedJson<T>(url: string, token: string): Promise<T> {
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        return res.json() as Promise<T>;
+    }
+
     onMount(async () => {
-        const module = await import('frappe-charts/dist/frappe-charts.min.esm');
-        const Chart = module.Chart;
+        loading = true;
+        error = null;
 
-        const commonHeight = 240;
+        const token = $accessToken ?? getCookie('access_token') ?? null;
+        accessToken.set(token);
 
-        // Wykres 1: Skupienie
-        if (focusChartRef) {
-            new Chart(focusChartRef, {
-                data: focusData,
-                type: 'bar',
-                colors: ['#8e2de2'],
-                height: commonHeight,
-                axisOptions: { xAxisMode: 'tick' },
-            });
+        if (!token) {
+            await goto('/login');
+            return;
         }
 
-        // Wykres 2: Produktywność
-        if (prodChartRef) {
-            new Chart(prodChartRef, {
-                data: productivityData,
-                type: 'line',
-                colors: ['#c31432'],
-                height: commonHeight,
-            });
-        }
+        try {
+            // pobierz dane
+            const [f, p, a] = await Promise.all([
+                authedJson<ChartData>('http://127.0.0.1:8000/video/history', token),
+                authedJson<ChartData>('http://127.0.0.1:8000/video/stats/daily', token),
+                authedJson<ChartData>('http://127.0.0.1:8000/video/stats/activity', token),
+            ]);
 
-        // Wykres 3: Podział aktywności
-        if (activityChartRef) {
-            new Chart(activityChartRef, {
-                data: activityData,
-                type: 'percentage',
-                height: commonHeight,
-                colors: ['#28a745', '#ffc107', '#17a2b8'],
-            });
+            focusData = f;
+            productivityData = p;
+            activityData = a;
+
+            const mod = await import('frappe-charts/dist/frappe-charts.min.esm');
+            const Chart = mod.Chart;
+            const commonHeight = 240;
+
+            if (focusChartRef && focusData?.labels?.length) {
+                new Chart(focusChartRef, {
+                    data: focusData,
+                    type: 'bar',
+                    colors: ['#8e2de2'],
+                    height: commonHeight,
+                    axisOptions: { xAxisMode: 'tick' },
+                });
+            }
+
+            if (prodChartRef && productivityData?.labels?.length) {
+                new Chart(prodChartRef, {
+                    data: productivityData,
+                    type: 'line',
+                    colors: ['#c31432'],
+                    height: commonHeight,
+                });
+            }
+
+            if (activityChartRef && activityData?.labels?.length) {
+                new Chart(activityChartRef, {
+                    data: activityData,
+                    type: 'percentage',
+                    height: commonHeight,
+                    colors: ['#28a745', '#ffc107', '#17a2b8'],
+                });
+            }
+        } catch (e) {
+            console.error(e);
+            error = 'Nie udało się pobrać danych z API. Sprawdź czy backend działa.';
+        } finally {
+            loading = false;
         }
     });
 </script>
@@ -62,7 +104,7 @@
     }
 
     .dashboard-header h1 {
-        font-size: 2rem; 
+        font-size: 2rem;
         font-weight: var(--font-weight-bold);
         color: #fff;
         margin-bottom: 0;
@@ -95,7 +137,7 @@
     }
 
     .chart-container h2 {
-        font-size: 1.1rem; 
+        font-size: 1.1rem;
         font-weight: var(--font-weight-bold);
         margin-bottom: var(--spacing-sm);
         text-align: center;
@@ -112,7 +154,7 @@
     :global(.chart-container .frappe-chart .chart-legend text) {
         fill: #ffffff !important;
         font-family: inherit !important;
-        font-size: 10px !important; 
+        font-size: 10px !important;
     }
 
     :global(.chart-container .frappe-chart .axis-line),
@@ -140,20 +182,26 @@
         <p>Oto podsumowanie Twojej aktywności i produktywności.</p>
     </header>
 
-    <div class="charts-grid">
-        <div class="chart-container">
-            <h2>Poziom skupienia (%)</h2>
-            <div bind:this={focusChartRef}></div>
-        </div>
+    {#if loading}
+        <p style="text-align:center;">Ładowanie…</p>
+    {:else if error}
+        <p style="text-align:center; color: var(--error-color);">{error}</p>
+    {:else}
+        <div class="charts-grid">
+            <div class="chart-container">
+                <h2>Poziom skupienia (%)</h2>
+                <div bind:this={focusChartRef}></div>
+            </div>
 
-        <div class="chart-container">
-            <h2>Trendy produktywności</h2>
-            <div bind:this={prodChartRef}></div>
-        </div>
+            <div class="chart-container">
+                <h2>Trendy produktywności</h2>
+                <div bind:this={prodChartRef}></div>
+            </div>
 
-        <div class="chart-container">
-            <h2>Podział aktywności</h2>
-            <div bind:this={activityChartRef}></div>
+            <div class="chart-container">
+                <h2>Podział aktywności</h2>
+                <div bind:this={activityChartRef}></div>
+            </div>
         </div>
-    </div>
+    {/if}
 </div>

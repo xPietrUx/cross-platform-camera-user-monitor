@@ -2,10 +2,11 @@
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
     import { accessToken } from '../../stores';
+    import { getCookie } from '$lib/utils';
 
     let activeTab: 'login' | 'register' = 'login';
     let errorMessage = '';
-    let successMessage = ''; // NOWE: Zmienna na komunikat sukcesu
+    let successMessage = '';
 
     // Zmienne do logowania
     let email = '';
@@ -65,7 +66,7 @@
     async function handleRegister() {
         errorMessage = '';
         successMessage = '';
-        
+
         if (regPassword !== regConfirmPassword) {
             errorMessage = 'Hasła nie są identyczne.';
             return;
@@ -136,11 +137,9 @@
     function checkLoginStatus() {
         const token = getCookie('access_token');
 
-        // Synchronizacja store przy odświeżeniu strony logowania
         if (token) {
             accessToken.set(token);
             try {
-                // Dekodowanie payload JWT (część po kropce)
                 const base64Url = token.split('.')[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
                 const jsonPayload = decodeURIComponent(
@@ -154,22 +153,26 @@
                 );
 
                 const payload = JSON.parse(jsonPayload);
-                // Ustawiamy zmienne, które przełączą widok w HTML
-                loggedUserEmail = payload.sub || 'Użytkownik';
-                isLoggedIn = true;
+                
+                // Sprawdź ważność tokena
+                const now = Math.floor(Date.now() / 1000);
+                if (payload.exp && payload.exp > now) {
+                    loggedUserEmail = payload.sub || 'Użytkownik';
+                    isLoggedIn = true;
+                } else {
+                    // Token wygasł – NIE wylogowuj, tylko pokaż formularz
+                    isLoggedIn = false;
+                    console.warn('Token wygasł');
+                }
             } catch (e) {
                 console.error('Błąd tokena:', e);
-                handleLogout();
+                // Token uszkodzony – NIE wylogowuj, tylko pokaż formularz
+                isLoggedIn = false;
             }
         } else {
             accessToken.set(null);
+            isLoggedIn = false;
         }
-    }
-
-    function getCookie(name: string) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(';').shift();
     }
 </script>
 

@@ -1,7 +1,8 @@
 <script lang="ts">
-    import type { PageData } from './$types';
-
-    export let data: PageData;
+    import { onMount } from 'svelte';
+    import { goto } from '$app/navigation';
+    import { accessToken } from '../../stores';
+    import { getCookie } from '$lib/utils';
 
     interface User {
         id: number;
@@ -11,7 +12,42 @@
         online_status: boolean;
     }
 
-    $: users = data.users as User[];
+    let users: User[] = [];
+    let loading = true;
+    let error: string | null = null;
+
+    onMount(async () => {
+        loading = true;
+        error = null;
+
+        const token = $accessToken ?? getCookie('access_token') ?? null;
+        accessToken.set(token);
+
+        if (!token) {
+            await goto('/login');
+            return;
+        }
+
+        try {
+            const res = await fetch('http://127.0.0.1:8000/users/', {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (res.status === 401) {
+                await goto('/login');
+                return;
+            }
+
+            if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+
+            users = (await res.json()) as User[];
+        } catch (e) {
+            console.error(e);
+            error = 'Nie udało się pobrać listy użytkowników.';
+        } finally {
+            loading = false;
+        }
+    });
 </script>
 
 <style>
@@ -158,69 +194,77 @@
         <p>Zarządzaj użytkownikami systemu monitorowania</p>
     </header>
 
-    <div class="users-grid">
-        {#each users as user}
-            <div class="user-card">
-                <div class="user-header">
-                    <div class="user-avatar">
-                        <svg
-                            width="40"
-                            height="40"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
+    {#if loading}
+        <p style="text-align:center;">Ładowanie…</p>
+    {:else if error}
+        <p style="text-align:center; color: var(--error-color);">{error}</p>
+    {:else}
+        <div class="users-grid">
+            {#each users as user}
+                <div class="user-card">
+                    <div class="user-header">
+                        <div class="user-avatar">
+                            <svg
+                                width="40"
+                                height="40"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                                <circle cx="12" cy="7" r="4" />
+                            </svg>
+                        </div>
+                        <div
+                            class="user-status"
+                            class:online={user.online_status}
+                            class:offline={!user.online_status}
                         >
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                            <circle cx="12" cy="7" r="4" />
-                        </svg>
+                            <span class="status-dot"></span>
+                            <span class="status-text"
+                                >{user.online_status ? 'Online' : 'Offline'}</span
+                            >
+                        </div>
                     </div>
-                    <div
-                        class="user-status"
-                        class:online={user.online_status}
-                        class:offline={!user.online_status}
-                    >
-                        <span class="status-dot"></span>
-                        <span class="status-text">{user.online_status ? 'Online' : 'Offline'}</span>
-                    </div>
-                </div>
 
-                <div class="user-info">
-                    <h2>{user.name}</h2>
-                    <div class="info-row">
-                        <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                        >
-                            <path
-                                d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
-                            />
-                            <polyline points="22,6 12,13 2,6" />
-                        </svg>
-                        <span>{user.email}</span>
-                    </div>
-                    <div class="info-row">
-                        <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                        >
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                        <span>Dołączył: {user.created_at}</span>
+                    <div class="user-info">
+                        <h2>{user.name}</h2>
+                        <div class="info-row">
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <path
+                                    d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"
+                                />
+                                <polyline points="22,6 12,13 2,6" />
+                            </svg>
+                            <span>{user.email}</span>
+                        </div>
+                        <div class="info-row">
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                            >
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                            <span>Dołączył: {user.created_at}</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-        {/each}
-    </div>
+            {/each}
+        </div>
+    {/if}
 </div>

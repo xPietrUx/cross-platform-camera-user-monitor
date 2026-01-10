@@ -2,8 +2,9 @@
     import '../styles/style.css';
     import '../app.css';
     import { onMount } from 'svelte';
-    import { isCameraPageActive, accessToken } from '../stores'; // Importujemy accessToken
-    import { page } from '$app/stores';
+    import { goto } from '$app/navigation';
+    import { isCameraPageActive, accessToken } from '../stores';
+    import { getCookie } from '$lib/utils';
 
     // --- Logika Menu ---
     let isMenuExpanded = false;
@@ -12,33 +13,60 @@
         isMenuExpanded = !isMenuExpanded;
     }
 
-    // --- Logika Kamery ---
+    async function nav(e: MouseEvent, path: string) {
+        e.preventDefault();
 
+        // WAŻNE: jeśli przechodzisz do /camera, zamknij mini-stream ZANIM strona /camera odpali swój stream
+        if (path === '/camera') {
+            isCameraPageActive.set(true);
+            videoStreamUrl = null; // wymusi odmontowanie <img> i przerwanie requestu
+            isVideoLoading = true;
+        }
+
+        await goto(path);
+    }
+
+    async function openCamera(e: MouseEvent) {
+        e.preventDefault();
+        if ($isCameraPageActive) return;
+        isCameraPageActive.set(true);
+        await goto('/camera');
+    }
+
+    async function closeCamera(e: MouseEvent) {
+        e.preventDefault();
+        e.stopPropagation();
+        isCameraPageActive.set(false);
+        await goto('/mainpage');
+    }
+
+    // --- Logika Kamery (globalny podgląd) ---
     let videoStreamUrl: string | null = null;
     let isVideoLoading = true;
 
-    function getCookie(name: string) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(';').shift();
-    }
-
+    // NAJPIERW załaduj token w onMount (synchronicznie)
     onMount(() => {
         const token = getCookie('access_token');
-        accessToken.set(token || null);
+        accessToken.set(token);
     });
 
-    $: if ($accessToken) {
-        videoStreamUrl = `http://127.0.0.1:8000/video/stream?token=${$accessToken}`;
-        isVideoLoading = true;
-    } else {
-        videoStreamUrl = null;
+    // URL zawsze gdy jest token (NIE uzależniaj od isCameraPageActive)
+    $: {
+        if ($accessToken) {
+            videoStreamUrl = `http://127.0.0.1:8000/video/stream?token=${$accessToken}`;
+            isVideoLoading = true;
+        } else {
+            videoStreamUrl = null;
+            isVideoLoading = true;
+        }
     }
 
     function handleVideoLoad() {
-        if (videoStreamUrl) {
-            isVideoLoading = false;
-        }
+        if (videoStreamUrl) isVideoLoading = false;
+    }
+
+    function handleVideoError() {
+        isVideoLoading = true;
     }
 </script>
 
@@ -161,19 +189,26 @@
         bottom: 20px;
         right: 20px;
         width: 240px;
-        height: auto;
         background-color: #000;
         border: 2px solid rgba(255, 255, 255, 0.2);
         border-radius: 8px;
         overflow: hidden;
         z-index: 9999;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-        transition: opacity 0.3s ease;
+        transition: all 0.2s ease;
+        cursor: pointer;
     }
 
-    .global-camera-preview:hover {
-        opacity: 1;
-        border-color: rgba(255, 255, 255, 0.8);
+    .global-camera-preview.expanded {
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        border: none;
+        cursor: default;
     }
 
     .global-camera-preview img {
@@ -182,9 +217,23 @@
         display: block;
     }
 
-    .global-camera-preview img.hidden {
-        opacity: 0;
+    .global-camera-preview.expanded img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .close-btn {
         position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 10000;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(0, 0, 0, 0.35);
+        color: white;
+        cursor: pointer;
     }
 
     .loading-container {
@@ -286,7 +335,7 @@
 
         <ul class="menu-list">
             <li>
-                <a href="/login" class="menu-item">
+                <a href="/login" class="menu-item" on:click={(e) => nav(e, '/login')}>
                     <svg
                         class="menu-icon"
                         width="20"
@@ -305,8 +354,9 @@
                     {/if}
                 </a>
             </li>
+
             <li>
-                <a href="/mainpage" class="menu-item">
+                <a href="/mainpage" class="menu-item" on:click={(e) => nav(e, '/mainpage')}>
                     <svg
                         class="menu-icon"
                         width="20"
@@ -324,8 +374,9 @@
                     {/if}
                 </a>
             </li>
+
             <li>
-                <a href="/users" class="menu-item">
+                <a href="/users" class="menu-item" on:click={(e) => nav(e, '/users')}>
                     <svg
                         class="menu-icon"
                         width="20"
@@ -345,8 +396,9 @@
                     {/if}
                 </a>
             </li>
+
             <li>
-                <a href="/camera" class="menu-item">
+                <a href="/camera" class="menu-item" on:click={(e) => nav(e, '/camera')}>
                     <svg
                         class="menu-icon"
                         width="20"
@@ -373,9 +425,19 @@
         <slot />
     </main>
 
-    <!-- Global Camera Preview (Always on top) -->
+    <!-- Global Camera Preview -->
     {#if videoStreamUrl}
-        <a class="global-camera-preview" class:hidden-preview={$isCameraPageActive} href="/camera">
+        <div
+            class="global-camera-preview"
+            class:expanded={$isCameraPageActive}
+            role="button"
+            tabindex="0"
+            on:click={openCamera}
+        >
+            {#if $isCameraPageActive}
+                <button class="close-btn" on:click={closeCamera}>Wróć</button>
+            {/if}
+
             {#if isVideoLoading}
                 <div class="loading-container">
                     <div class="status-indicator false" title="Kamera nieaktywna"></div>
@@ -386,14 +448,11 @@
 
             <img
                 src={videoStreamUrl}
-                alt="System Monitorowania"
+                alt="Strumień wideo z kamery"
                 class:hidden={isVideoLoading}
                 on:load={handleVideoLoad}
+                on:error={handleVideoError}
             />
-
-            {#if !isVideoLoading}
-                <div class="status-indicator" title="Kamera aktywna"></div>
-            {/if}
-        </a>
+        </div>
     {/if}
 </div>
