@@ -41,21 +41,30 @@ if (!gotTheLock) {
         const resourcesPath = process.resourcesPath;
         console.log('process.resourcesPath =', resourcesPath);
 
-        const backendPath = path.join(resourcesPath, 'api.exe');
+        const backendFile = process.platform === 'win32' ? 'api.exe' : 'api';
+        const backendPath = path.join(resourcesPath, backendFile);
         console.log('Backend path =', backendPath);
-
         console.log('Backend exists =', fs.existsSync(backendPath));
 
         if (!fs.existsSync(backendPath)) {
-            console.error('Nie znaleziono api.exe!');
+            console.error(`Nie znaleziono ${backendFile}!`);
             return;
+        }
+
+        // Linux/Mac: upewnij się, że plik jest wykonywalny
+        if (process.platform !== 'win32') {
+            try {
+                fs.chmodSync(backendPath, 0o755);
+            } catch (e) {
+                console.warn('chmod backendPath nieudany:', e);
+            }
         }
 
         backendProcess = spawn(backendPath, [], {
             cwd: resourcesPath,
             stdio: ['ignore', 'pipe', 'pipe'],
             detached: false,
-            windowsHide: true,
+            windowsHide: process.platform === 'win32',
         });
 
         backendProcess.stdout?.on('data', (data) => {
@@ -205,4 +214,11 @@ if (!gotTheLock) {
             }, 2000);
         }
     });
+
+    // Linux: obejście crashy związanych z VAAPI/GPU (często kończą się SIGSEGV)
+    if (process.platform === 'linux') {
+        app.disableHardwareAcceleration();
+        app.commandLine.appendSwitch('disable-gpu');
+        app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecoder');
+    }
 }
