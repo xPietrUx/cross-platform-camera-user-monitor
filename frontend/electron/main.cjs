@@ -4,6 +4,21 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 
+// Linux (VM): stabilizacja GPU/VAAPI
+if (process.platform === 'linux') {
+    // Wymuś software OpenGL (działa lepiej w VM bez 3D accel)
+    app.commandLine.appendSwitch('use-gl', 'swiftshader');
+
+    // Wyłącz VAAPI i GPU (różne kombinacje w zależności od środowiska)
+    app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecoder');
+    app.commandLine.appendSwitch('disable-gpu');
+    app.commandLine.appendSwitch('disable-gpu-compositing');
+    app.commandLine.appendSwitch('disable-gpu-sandbox');
+
+    // Opcjonalnie (mniej bezpieczne, ale pomaga w części VM/CI):
+    // app.commandLine.appendSwitch('no-sandbox');
+}
+
 protocol.registerSchemesAsPrivileged([
     {
         scheme: 'app',
@@ -214,11 +229,4 @@ if (!gotTheLock) {
             }, 2000);
         }
     });
-
-    // Linux: obejście crashy związanych z VAAPI/GPU (często kończą się SIGSEGV)
-    if (process.platform === 'linux') {
-        app.disableHardwareAcceleration();
-        app.commandLine.appendSwitch('disable-gpu');
-        app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecoder');
-    }
 }
