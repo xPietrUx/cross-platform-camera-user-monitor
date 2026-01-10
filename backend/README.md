@@ -33,4 +33,11 @@ pyinstaller --noconfirm --onefile --windowed --name api `
   --hidden-import=passlib.handlers.bcrypt `
   --add-data="haarcascades;haarcascades" `
   run_server.py --distpath dist/win
+
+# Linux
+pyinstaller --noconfirm --onefile --name api \
+  --hidden-import passlib.handlers.bcrypt \
+  --add-data "haarcascades:haarcascades" \
+  run_server.py \
+  --distpath dist/linux
 ```
