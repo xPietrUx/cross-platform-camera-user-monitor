@@ -187,9 +187,6 @@ if (!gotTheLock) {
             mainWindow.loadURL('http://localhost:5173');
         }
 
-        // (opcjonalnie) nie otwieraj devtools w produkcji
-        mainWindow.webContents.openDevTools();
-
         mainWindow.on('closed', () => {
             console.log('Okno zamknięte');
             mainWindow = null;
