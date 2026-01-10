@@ -29,9 +29,7 @@ class AuthService:
         user.password = hashed_password
 
         current_dateTime = datetime.now()
-        date_slash = current_dateTime.strftime("%x")
-        date_proper = date_slash.replace("/", ".")
-        user.created_at = date_proper
+        user.created_at = current_dateTime.strftime("%d.%m.%Y")
 
         # Zapisz w bazie
         session.add(user)
