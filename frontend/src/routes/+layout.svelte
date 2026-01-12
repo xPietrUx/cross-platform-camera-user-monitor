@@ -49,6 +49,20 @@
     onMount(() => {
         const token = getCookie('access_token');
         accessToken.set(token);
+
+        // Sprawdź uprawnienia do powiadomień przy starcie
+        if (Notification.permission !== 'granted') {
+            Notification.requestPermission();
+        }
+
+        // Ustaw interwał na 1 godzinę (3600000 ms) - obecnie w twoim kodzie jest 5000ms (5s) do testów
+        const workInterval = setInterval(() => {
+            showWorkNotification();
+        }, 5000);
+
+        return () => {
+            clearInterval(workInterval);
+        };
     });
 
     // URL zawsze gdy jest token (NIE uzależniaj od isCameraPageActive)
@@ -101,7 +115,7 @@
         // Ustaw interwał na 1 godzinę (3600000 ms) - obecnie w twoim kodzie jest 5000ms (5s) do testów
         const workInterval = setInterval(() => {
             showWorkNotification();
-        }, 3600000);
+        }, 5000);
 
         return () => {
             clearInterval(workInterval);
