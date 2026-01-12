@@ -1,7 +1,7 @@
 <script lang="ts">
     import '../styles/style.css';
     import '../app.css';
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { goto } from '$app/navigation';
     import { isCameraPageActive, accessToken } from '../stores';
     import { getCookie } from '$lib/utils';
@@ -43,6 +43,7 @@
     // --- Logika Kamery (globalny podgląd) ---
     let videoStreamUrl: string | null = null;
     let isVideoLoading = true;
+    let imgElement: HTMLImageElement | null = null;
 
     // NAJPIERW załaduj token w onMount (synchronicznie)
     onMount(() => {
@@ -56,18 +57,40 @@
             videoStreamUrl = `http://127.0.0.1:8000/video/stream?token=${$accessToken}`;
             isVideoLoading = true;
         } else {
+            // Wymuś zatrzymanie strumienia jeśli img element istnieje
+            if (imgElement) {
+                imgElement.src = '';
+                imgElement.srcset = '';
+                imgElement.removeAttribute('src');
+
+                // Wymuś przeładowanie przeglądarki aby przerwać request
+                imgElement.onerror = null;
+                imgElement.onload = null;
+            }
+
+            // Wyczyść URL - to usunie element <img> z DOM
             videoStreamUrl = null;
             isVideoLoading = true;
         }
     }
 
     function handleVideoLoad() {
-        if (videoStreamUrl) isVideoLoading = false;
+        if (videoStreamUrl) {
+            isVideoLoading = false;
+        }
     }
 
     function handleVideoError() {
         isVideoLoading = true;
     }
+
+    // Cleanup przy odmontowaniu komponentu
+    onDestroy(() => {
+        if (imgElement) {
+            imgElement.src = '';
+            imgElement.removeAttribute('src');
+        }
+    });
 
     onMount(() => {
         // Sprawdź uprawnienia do powiadomień przy starcie
@@ -452,6 +475,7 @@
             {/if}
 
             <img
+                bind:this={imgElement}
                 src={videoStreamUrl}
                 alt="Strumień wideo z kamery"
                 class:hidden={isVideoLoading}
@@ -459,5 +483,5 @@
                 on:error={handleVideoError}
             />
         </div>
-    {/if}
+    {:else}{/if}
 </div>

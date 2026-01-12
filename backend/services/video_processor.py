@@ -3,6 +3,8 @@ import time
 import signal
 import sys
 import os
+import asyncio
+from fastapi import Request
 from pathlib import Path
 from datetime import datetime
 from sqlmodel import Session, select
@@ -191,9 +193,19 @@ def start_user_stream(user_id: int) -> bool:
 
 
 def end_user_stream(user_id: int) -> None:
-    """Zwalnia slot streamu dla usera."""
+    """Zwalnia slot streamu dla usera i ZAMYKA KAMERĘ jeśli nikt inny jej nie używa."""
+    global global_camera
+
     with _active_streams_lock:
         _active_streams.discard(user_id)
+
+        # Sprawdź, czy są jacyś inni aktywni użytkownicy
+        if len(_active_streams) == 0:
+            print("[INFO] Brak aktywnych użytkowników - zwalnianie zasobów kamery")
+            if global_camera is not None:
+                if global_camera.isOpened():
+                    global_camera.release()
+                global_camera = None
 
 
 # Flaga do graceful shutdown
@@ -210,7 +222,7 @@ signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
 
-def generate_frames(user_id: int):
+async def generate_frames(user_id: int, request: Request):
     """
     Generator klatek wideo z obsługą graceful shutdown.
     """
@@ -229,13 +241,18 @@ def generate_frames(user_id: int):
 
     try:
         while True:
+            # 1. Sprawdź czy klient (frontend) zerwał połączenie
+            if await request.is_disconnected():
+                print(f"[INFO] Klient rozłączony user_id={user_id}")
+                break
+
             if shutdown_flag:
                 break
 
             success, frame = cap.read()
             if not success:
                 print(f"[WARNING] Nie udało się odczytać klatki dla user_id={user_id}")
-                time.sleep(0.1)
+                await asyncio.sleep(0.1)
                 continue
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -325,6 +342,11 @@ def generate_frames(user_id: int):
 
             yield frame_bytes
 
+            # Ważne: oddaj sterowanie pętli zdarzeń, aby mogła obsłużyć request.is_disconnected()
+            await asyncio.sleep(0.01)
+
+    except asyncio.CancelledError:
+        print(f"[INFO] Strumień wideo anulowany dla user_id={user_id}")
     except GeneratorExit:
         # klient zamknął połączenie (np. nawigacja / zamknięcie okna)
         return

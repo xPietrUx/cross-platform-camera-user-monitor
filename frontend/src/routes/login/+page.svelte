@@ -1,7 +1,7 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
-    import { accessToken } from '../../stores';
+    import { accessToken, stopCamera } from '../../stores';
     import { getCookie } from '$lib/utils';
 
     let activeTab: 'login' | 'register' = 'login';
@@ -116,18 +116,19 @@
                     },
                 });
             }
-        } catch (e) {
-            console.error('Błąd podczas wylogowywania z serwera:', e);
-        }
+        } catch (e) {}
 
         document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
 
-        accessToken.set(null);
+        stopCamera();
 
         isLoggedIn = false;
         loggedUserEmail = '';
         activeTab = 'login';
         successMessage = '';
+        errorMessage = '';
+
+        console.log('✅ Wylogowanie zakończone');
     }
 
     onMount(() => {
@@ -138,7 +139,6 @@
         const token = getCookie('access_token');
 
         if (token) {
-            accessToken.set(token);
             try {
                 const base64Url = token.split('.')[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -153,25 +153,33 @@
                 );
 
                 const payload = JSON.parse(jsonPayload);
-                
+
                 // Sprawdź ważność tokena
                 const now = Math.floor(Date.now() / 1000);
                 if (payload.exp && payload.exp > now) {
                     loggedUserEmail = payload.sub || 'Użytkownik';
                     isLoggedIn = true;
+                    accessToken.set(token);
                 } else {
-                    // Token wygasł – NIE wylogowuj, tylko pokaż formularz
+                    // Token wygasł – wyczyść ciasteczko i store
+                    console.warn('Token wygasł - czyszczenie sesji');
+                    document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
+                    accessToken.set(null);
                     isLoggedIn = false;
-                    console.warn('Token wygasł');
+                    loggedUserEmail = '';
                 }
             } catch (e) {
                 console.error('Błąd tokena:', e);
-                // Token uszkodzony – NIE wylogowuj, tylko pokaż formularz
+                // Token uszkodzony – wyczyść ciasteczko i store
+                document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
+                accessToken.set(null);
                 isLoggedIn = false;
+                loggedUserEmail = '';
             }
         } else {
             accessToken.set(null);
             isLoggedIn = false;
+            loggedUserEmail = '';
         }
     }
 </script>

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     import { goto } from '$app/navigation';
     import { accessToken } from '../../stores';
     import { getCookie } from '$lib/utils';
@@ -17,13 +17,46 @@
     let prodChartRef: HTMLElement;
     let activityChartRef: HTMLElement;
 
+    // Instancje wykresów (aby móc je aktualizować)
+    let focusChartInstance: any = null;
+    let prodChartInstance: any = null;
+    let activityChartInstance: any = null;
+
     let error: string | null = null;
     let loading = true;
+    let refreshInterval: any;
 
     async function authedJson<T>(url: string, token: string): Promise<T> {
         const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
         return res.json() as Promise<T>;
+    }
+
+    // Funkcja do pobierania i aktualizacji danych
+    async function refreshData() {
+        const token = $accessToken ?? getCookie('access_token');
+        if (!token) return;
+
+        try {
+            const [f, p, a] = await Promise.all([
+                authedJson<ChartData>('http://127.0.0.1:8000/video/history', token),
+                authedJson<ChartData>('http://127.0.0.1:8000/video/stats/daily', token),
+                authedJson<ChartData>('http://127.0.0.1:8000/video/stats/activity', token),
+            ]);
+
+            focusData = f;
+            productivityData = p;
+            activityData = a;
+
+            // Jeśli wykresy już istnieją -> aktualizuj dane
+            // Jeśli nie -> zostaną utworzone w onMount (lub poniżej)
+            if (focusChartInstance && focusData) focusChartInstance.update(focusData);
+            if (prodChartInstance && productivityData) prodChartInstance.update(productivityData);
+            if (activityChartInstance && activityData) activityChartInstance.update(activityData);
+        } catch (e) {
+            console.error('Błąd odświeżania danych:', e);
+            // Nie ustawiamy globalnego błędu tutaj, aby nie przerywać widoku w razie chwilowego problemu z siecią
+        }
     }
 
     onMount(async () => {
@@ -39,23 +72,16 @@
         }
 
         try {
-            // pobierz dane
-            const [f, p, a] = await Promise.all([
-                authedJson<ChartData>('http://127.0.0.1:8000/video/history', token),
-                authedJson<ChartData>('http://127.0.0.1:8000/video/stats/daily', token),
-                authedJson<ChartData>('http://127.0.0.1:8000/video/stats/activity', token),
-            ]);
-
-            focusData = f;
-            productivityData = p;
-            activityData = a;
+            // Pierwsze pobranie danych
+            await refreshData();
 
             const mod = await import('frappe-charts/dist/frappe-charts.min.esm');
             const Chart = mod.Chart;
             const commonHeight = 240;
 
+            // Inicjalizacja wykresów
             if (focusChartRef && focusData?.labels?.length) {
-                new Chart(focusChartRef, {
+                focusChartInstance = new Chart(focusChartRef, {
                     data: focusData,
                     type: 'bar',
                     colors: ['#8e2de2'],
@@ -65,7 +91,7 @@
             }
 
             if (prodChartRef && productivityData?.labels?.length) {
-                new Chart(prodChartRef, {
+                prodChartInstance = new Chart(prodChartRef, {
                     data: productivityData,
                     type: 'line',
                     colors: ['#c31432'],
@@ -74,19 +100,28 @@
             }
 
             if (activityChartRef && activityData?.labels?.length) {
-                new Chart(activityChartRef, {
+                activityChartInstance = new Chart(activityChartRef, {
                     data: activityData,
                     type: 'percentage',
                     height: commonHeight,
                     colors: ['#28a745', '#ffc107', '#17a2b8'],
                 });
             }
+
+            // Ustaw interwał odświeżania co 1 minutę (60000ms)
+            // Dzięki temu user zobaczy nowe dane maksymalnie minutę po ich wygenerowaniu
+            refreshInterval = setInterval(refreshData, 60000);
         } catch (e) {
             console.error(e);
             error = 'Nie udało się pobrać danych z API. Sprawdź czy backend działa.';
         } finally {
             loading = false;
         }
+    });
+
+    onDestroy(() => {
+        // Wyczyść interwał przy wyjściu ze strony, aby nie zwolnilo przeglądarki
+        if (refreshInterval) clearInterval(refreshInterval);
     });
 </script>
 

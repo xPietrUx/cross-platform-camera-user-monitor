@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
 from typing import List
 from sqlmodel import Session, select
@@ -28,7 +28,9 @@ def select_camera():
 
 
 @router.get("/stream")
-def video_stream(current_user: User = Depends(get_current_user)):
+async def video_stream(
+    request: Request, current_user: User = Depends(get_current_user)
+):
     """
     Endpoint do streamingu. Wymaga tokena (przekazywanego w URL ?token=...).
     """
@@ -42,7 +44,7 @@ def video_stream(current_user: User = Depends(get_current_user)):
 
     try:
         return StreamingResponse(
-            video_processor.generate_frames(user_id=user_id),
+            video_processor.generate_frames(user_id=user_id, request=request),
             media_type="multipart/x-mixed-replace; boundary=frame",
             headers={
                 "Cache-Control": "no-cache, no-store, must-revalidate",
