@@ -45,25 +45,44 @@
     let isVideoLoading = true;
     let imgElement: HTMLImageElement | null = null;
 
-    // NAJPIERW załaduj token w onMount (synchronicznie)
+    // Zmienna do przechowywania identyfikatora interwału
+    let workInterval: any;
+
+    // 1. ZREDUKOWANY onMount - tylko inicjalizacja
     onMount(() => {
         const token = getCookie('access_token');
         accessToken.set(token);
 
-        // Sprawdź uprawnienia do powiadomień przy starcie
         if (Notification.permission !== 'granted') {
             Notification.requestPermission();
         }
 
-        // Ustaw interwał na 1 godzinę (3600000 ms) - obecnie w twoim kodzie jest 5000ms (5s) do testów
-        const workInterval = setInterval(() => {
-            showWorkNotification();
-        }, 5000);
-
+        // Return cleanup function
         return () => {
-            clearInterval(workInterval);
+            if (workInterval) clearInterval(workInterval);
         };
     });
+
+    // 2. REAKTYWNE zarządzanie interwałem
+    // Ten kod uruchomi się automatycznie, gdy zmieni się $accessToken
+    $: {
+        if ($accessToken) {
+            // Jeśli jest token i nie ma jeszcze licznika -> uruchom go
+            if (!workInterval) {
+                console.log('Rozpoczynam odliczanie czasu pracy...');
+                workInterval = setInterval(() => {
+                    showWorkNotification();
+                }, 5000); // 5000ms = 5s (zmień na 3600000 dla 1h)
+            }
+        } else {
+            // Jeśli token zniknął (wylogowanie) -> natychmiast zatrzymaj licznik
+            if (workInterval) {
+                console.log('Zatrzymano odliczanie (wylogowanie).');
+                clearInterval(workInterval);
+                workInterval = null;
+            }
+        }
+    }
 
     // URL zawsze gdy jest token (NIE uzależniaj od isCameraPageActive)
     $: {
@@ -104,31 +123,21 @@
             imgElement.src = '';
             imgElement.removeAttribute('src');
         }
-    });
-
-    onMount(() => {
-        // Sprawdź uprawnienia do powiadomień przy starcie
-        if (Notification.permission !== 'granted') {
-            Notification.requestPermission();
-        }
-
-        // Ustaw interwał na 1 godzinę (3600000 ms) - obecnie w twoim kodzie jest 5000ms (5s) do testów
-        const workInterval = setInterval(() => {
-            showWorkNotification();
-        }, 5000);
-
-        return () => {
+        if (workInterval) {
             clearInterval(workInterval);
-        };
+        }
     });
 
     function showWorkNotification() {
-        // Dodany warunek: jeśli brak tokena, nie rób nic
+        // Dodatkowe zabezpieczenie
         if (!$accessToken) return;
 
         if (Notification.permission === 'granted') {
+            // tag: 'work-break' sprawia, że powiadomienia nie będą się piętrzyć
+            // (nowe zastąpi stare zamiast tworzyć listę)
             new Notification('Przerwa w pracy ☕🤎🥯🍪', {
                 body: 'Minęła godzina pracy. Czas na krótką przerwę!',
+                // tag: 'work-break',
             });
         }
     }
