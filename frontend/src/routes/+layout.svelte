@@ -68,6 +68,33 @@
     function handleVideoError() {
         isVideoLoading = true;
     }
+
+    onMount(() => {
+        // Sprawdź uprawnienia do powiadomień przy starcie
+        if (Notification.permission !== 'granted') {
+            Notification.requestPermission();
+        }
+
+        // Ustaw interwał na 1 godzinę (3600000 ms) - obecnie w twoim kodzie jest 5000ms (5s) do testów
+        const workInterval = setInterval(() => {
+            showWorkNotification();
+        }, 3600000);
+
+        return () => {
+            clearInterval(workInterval);
+        };
+    });
+
+    function showWorkNotification() {
+        // Dodany warunek: jeśli brak tokena, nie rób nic
+        if (!$accessToken) return;
+
+        if (Notification.permission === 'granted') {
+            new Notification('Przerwa w pracy ☕🤎🥯🍪', {
+                body: 'Minęła godzina pracy. Czas na krótką przerwę!',
+            });
+        }
+    }
 </script>
 
 <style>

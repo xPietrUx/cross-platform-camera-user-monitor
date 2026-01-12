@@ -1,5 +1,6 @@
 {
     "name": "cross-platform-camera",
+    "productName": "Cross Platform Camera",
     "private": true,
     "version": "0.0.1",
     "description": "Aplikacja do monitorowania efektywności klienta",
