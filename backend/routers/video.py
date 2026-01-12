@@ -8,8 +8,28 @@ from db.database import get_session
 from db.models import FocusLog, User, DistractionStat
 from collections import defaultdict
 from datetime import datetime, timedelta
+from functools import lru_cache
+import time
 
 router = APIRouter()
+
+# Cache dla wyników (ważny przez 10 sekund)
+_cache = {}
+_cache_ttl = 10  # sekundy
+
+
+def get_cached_or_compute(key: str, compute_fn):
+    """Prosty cache w pamięci z TTL."""
+    now = time.time()
+    if key in _cache:
+        data, timestamp = _cache[key]
+        if now - timestamp < _cache_ttl:
+            return data
+
+    # Oblicz na nowo
+    result = compute_fn()
+    _cache[key] = (result, now)
+    return result
 
 
 @router.get("/cameras", response_model=List[dict])
@@ -76,24 +96,27 @@ def get_focus_history(
     """
     Zwraca historię skupienia TYLKO dla zalogowanego użytkownika.
     """
-    # Filtrujemy po user_id, pobieramy ostatnie 8 wpisów
-    statement = (
-        select(FocusLog)
-        .where(FocusLog.user_id == current_user.id)
-        .order_by(FocusLog.timestamp.desc())
-        .limit(8)
-    )
-    results = session.exec(statement).all()
+    cache_key = f"history_{current_user.id}"
 
-    labels = []
-    values = []
+    def compute():
+        statement = (
+            select(FocusLog)
+            .where(FocusLog.user_id == current_user.id)
+            .order_by(FocusLog.timestamp.desc())
+            .limit(8)
+        )
+        results = session.exec(statement).all()
 
-    # Odwracamy kolejność, aby na wykresie czas płynął od lewej do prawej
-    for log in reversed(results):
-        labels.append(log.timestamp.strftime("%H:%M"))
-        values.append(log.focus_score)
+        labels = []
+        values = []
 
-    return {"labels": labels, "datasets": [{"name": "Skupienie", "values": values}]}
+        for log in reversed(results):
+            labels.append(log.timestamp.strftime("%H:%M"))
+            values.append(log.focus_score)
+
+        return {"labels": labels, "datasets": [{"name": "Skupienie", "values": values}]}
+
+    return get_cached_or_compute(cache_key, compute)
 
 
 @router.get("/stats/daily")
@@ -104,57 +127,47 @@ def get_daily_stats(
     """
     Zwraca średni poziom skupienia z ostatnich 7 dni.
     """
-    # 1. Przygotuj zakres dat (ostatnie 7 dni)
-    today = datetime.now().date()
-    dates = [today - timedelta(days=i) for i in range(6, -1, -1)]
+    cache_key = f"daily_{current_user.id}"
 
-    # 2. Pobierz logi z bazy dla tego użytkownika z ostatnich 7 dni
-    start_date = dates[0]
-    statement = (
-        select(FocusLog)
-        .where(FocusLog.user_id == current_user.id)
-        .where(FocusLog.timestamp >= start_date)
-    )
-    logs = session.exec(statement).all()
+    def compute():
+        today = datetime.now().date()
+        dates = [today - timedelta(days=i) for i in range(6, -1, -1)]
 
-    # 3. Pogrupuj wyniki po dacie
-    grouped_data = defaultdict(list)
-    for log in logs:
-        log_date = log.timestamp.date()
-        grouped_data[log_date].append(log.focus_score)
+        start_date = dates[0]
+        statement = (
+            select(FocusLog)
+            .where(FocusLog.user_id == current_user.id)
+            .where(FocusLog.timestamp >= start_date)
+        )
+        logs = session.exec(statement).all()
 
-    # 4. Oblicz średnie i przygotuj etykiety
-    labels = []
-    values = []
+        grouped_data = defaultdict(list)
+        for log in logs:
+            log_date = log.timestamp.date()
+            grouped_data[log_date].append(log.focus_score)
 
-    # Słownik do tłumaczenia dni tygodnia na polski
-    days_map = {
-        0: "Pon",
-        1: "Wt",
-        2: "Śr",
-        3: "Czw",
-        4: "Pt",
-        5: "Sob",
-        6: "Ndz",
-    }
+        labels = []
+        values = []
 
-    for date in dates:
-        # Etykieta: Dzień tygodnia (np. "Pon")
-        day_name = days_map[date.weekday()]
-        labels.append(day_name)
+        days_map = {0: "Pon", 1: "Wt", 2: "Śr", 3: "Czw", 4: "Pt", 5: "Sob", 6: "Ndz"}
 
-        # Wartość: Średnia lub 0 jeśli brak danych
-        scores = grouped_data[date]
-        if scores:
-            avg_score = int(sum(scores) / len(scores))
-            values.append(avg_score)
-        else:
-            values.append(0)
+        for date in dates:
+            day_name = days_map[date.weekday()]
+            labels.append(day_name)
 
-    return {
-        "labels": labels,
-        "datasets": [{"name": "Średnie skupienie (%)", "values": values}],
-    }
+            scores = grouped_data[date]
+            if scores:
+                avg_score = int(sum(scores) / len(scores))
+                values.append(avg_score)
+            else:
+                values.append(0)
+
+        return {
+            "labels": labels,
+            "datasets": [{"name": "Średnie skupienie (%)", "values": values}],
+        }
+
+    return get_cached_or_compute(cache_key, compute)
 
 
 @router.get("/stats/distractions")
@@ -211,50 +224,49 @@ def get_activity_stats(
     Zwraca sumę punktów skupienia dla każdego dnia z ostatnich 7 dni.
     Pozwala to oszacować, w który dzień użytkownik włożył najwięcej wysiłku.
     """
-    # 1. Zakres dat (ostatnie 7 dni)
-    today = datetime.now().date()
-    dates = [today - timedelta(days=i) for i in range(6, -1, -1)]
+    cache_key = f"activity_{current_user.id}"
 
-    start_date = dates[0]
-    statement = (
-        select(FocusLog)
-        .where(FocusLog.user_id == current_user.id)
-        .where(FocusLog.timestamp >= start_date)
-    )
-    logs = session.exec(statement).all()
+    def compute():
+        today = datetime.now().date()
+        dates = [today - timedelta(days=i) for i in range(6, -1, -1)]
 
-    # 2. Sumujemy wyniki dla każdego dnia
-    grouped_data = defaultdict(int)  # Domyślnie 0
-    for log in logs:
-        log_date = log.timestamp.date()
-        # Dodajemy wynik do sumy dnia (np. 85 + 90 + 100...)
-        # To uwzględnia zarówno czas pracy (więcej wpisów) jak i jakość (wyższy wynik)
-        grouped_data[log_date] += log.focus_score
+        start_date = dates[0]
+        statement = (
+            select(FocusLog)
+            .where(FocusLog.user_id == current_user.id)
+            .where(FocusLog.timestamp >= start_date)
+        )
+        logs = session.exec(statement).all()
 
-    labels = []
-    values = []
+        grouped_data = defaultdict(int)
+        for log in logs:
+            log_date = log.timestamp.date()
+            grouped_data[log_date] += log.focus_score
 
-    days_map = {
-        0: "Poniedziałek",
-        1: "Wtorek",
-        2: "Środa",
-        3: "Czwartek",
-        4: "Piątek",
-        5: "Sobota",
-        6: "Niedziela",
-    }
+        labels = []
+        values = []
 
-    for date in dates:
-        day_name = days_map[date.weekday()]
-        total_score = grouped_data[date]
+        days_map = {
+            0: "Poniedziałek",
+            1: "Wtorek",
+            2: "Środa",
+            3: "Czwartek",
+            4: "Piątek",
+            5: "Sobota",
+            6: "Niedziela",
+        }
 
-        # Dodajemy do wykresu tylko dni, w których była jakakolwiek aktywność
-        # (żeby wykres kołowy nie miał pustych sekcji)
-        if total_score > 0:
-            labels.append(day_name)
-            values.append(total_score)
+        for date in dates:
+            day_name = days_map[date.weekday()]
+            total_score = grouped_data[date]
 
-    return {
-        "labels": labels,
-        "datasets": [{"name": "Wkład pracy", "values": values}],
-    }
+            if total_score > 0:
+                labels.append(day_name)
+                values.append(total_score)
+
+        return {
+            "labels": labels,
+            "datasets": [{"name": "Wkład pracy", "values": values}],
+        }
+
+    return get_cached_or_compute(cache_key, compute)

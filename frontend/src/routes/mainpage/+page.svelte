@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
+    import { onMount, onDestroy, tick } from 'svelte';
     import { goto } from '$app/navigation';
     import { accessToken } from '../../stores';
     import { getCookie } from '$lib/utils';
@@ -17,10 +17,13 @@
     let prodChartRef: HTMLElement;
     let activityChartRef: HTMLElement;
 
-    // Instancje wykresów (aby móc je aktualizować)
+    // Instancje wykresów
     let focusChartInstance: any = null;
     let prodChartInstance: any = null;
     let activityChartInstance: any = null;
+
+    // Zmienna na klasę biblioteki (ładowana dynamicznie)
+    let ChartLibrary: any = null;
 
     let error: string | null = null;
     let loading = true;
@@ -32,30 +35,90 @@
         return res.json() as Promise<T>;
     }
 
-    // Funkcja do pobierania i aktualizacji danych
+    function updateCharts() {
+        if (!ChartLibrary) {
+            console.warn('⚠️ Biblioteka wykresów nie jest jeszcze załadowana');
+            return;
+        }
+
+        // Sprawdź czy elementy DOM są gotowe
+        if (!focusChartRef || !prodChartRef || !activityChartRef) {
+            console.warn('⚠️ Elementy DOM wykresów nie są jeszcze gotowe');
+            return;
+        }
+
+        const commonHeight = 240;
+
+        // --- Wykres 1: Skupienie ---
+        if (focusChartInstance) {
+            if (focusData) {
+                focusChartInstance.update(focusData);
+            }
+        } else if (focusData) {
+            focusChartInstance = new ChartLibrary(focusChartRef, {
+                data: focusData,
+                type: 'bar',
+                colors: ['#8e2de2'],
+                height: commonHeight,
+                axisOptions: { xAxisMode: 'tick' },
+            });
+        }
+
+        // --- Wykres 2: Produktywność ---
+        if (prodChartInstance) {
+            if (productivityData) {
+                prodChartInstance.update(productivityData);
+            }
+        } else if (productivityData) {
+            prodChartInstance = new ChartLibrary(prodChartRef, {
+                data: productivityData,
+                type: 'line',
+                colors: ['#c31432'],
+                height: commonHeight,
+            });
+        }
+
+        // --- Wykres 3: Aktywność ---
+        if (activityChartInstance) {
+            if (activityData) {
+                activityChartInstance.update(activityData);
+            }
+        } else if (activityData) {
+            activityChartInstance = new ChartLibrary(activityChartRef, {
+                data: activityData,
+                type: 'percentage',
+                height: commonHeight,
+                colors: ['#28a745', '#ffc107', '#17a2b8'],
+            });
+        }
+    }
+
     async function refreshData() {
         const token = $accessToken ?? getCookie('access_token');
         if (!token) return;
 
         try {
+            const startTime = performance.now();
+
             const [f, p, a] = await Promise.all([
                 authedJson<ChartData>('http://127.0.0.1:8000/video/history', token),
                 authedJson<ChartData>('http://127.0.0.1:8000/video/stats/daily', token),
                 authedJson<ChartData>('http://127.0.0.1:8000/video/stats/activity', token),
             ]);
 
+            const endTime = performance.now();
+
             focusData = f;
             productivityData = p;
             activityData = a;
 
-            // Jeśli wykresy już istnieją -> aktualizuj dane
-            // Jeśli nie -> zostaną utworzone w onMount (lub poniżej)
-            if (focusChartInstance && focusData) focusChartInstance.update(focusData);
-            if (prodChartInstance && productivityData) prodChartInstance.update(productivityData);
-            if (activityChartInstance && activityData) activityChartInstance.update(activityData);
+            // WAŻNE: Poczekaj na zakończenie renderowania DOM
+            await tick();
+
+            // Spróbuj zaktualizować lub stworzyć wykresy
+            updateCharts();
         } catch (e) {
-            console.error('Błąd odświeżania danych:', e);
-            // Nie ustawiamy globalnego błędu tutaj, aby nie przerywać widoku w razie chwilowego problemu z siecią
+            console.error('❌ Błąd odświeżania danych:', e);
         }
     }
 
@@ -72,56 +135,31 @@
         }
 
         try {
-            // Pierwsze pobranie danych
+            // 1. Najpierw ładujemy bibliotekę wykresów
+            const mod = await import('frappe-charts/dist/frappe-charts.min.esm');
+            ChartLibrary = mod.Chart;
+
+            // 2. Ukryj loader (aby wyrenderować kontenery wykresów)
+            loading = false;
+
+            // 3. Poczekaj na renderowanie DOM
+            await tick();
+
+            // 5. NATYCHMIAST pobierz dane (to wywoła updateCharts wewnątrz)
             await refreshData();
 
-            const mod = await import('frappe-charts/dist/frappe-charts.min.esm');
-            const Chart = mod.Chart;
-            const commonHeight = 240;
-
-            // Inicjalizacja wykresów
-            if (focusChartRef && focusData?.labels?.length) {
-                focusChartInstance = new Chart(focusChartRef, {
-                    data: focusData,
-                    type: 'bar',
-                    colors: ['#8e2de2'],
-                    height: commonHeight,
-                    axisOptions: { xAxisMode: 'tick' },
-                });
-            }
-
-            if (prodChartRef && productivityData?.labels?.length) {
-                prodChartInstance = new Chart(prodChartRef, {
-                    data: productivityData,
-                    type: 'line',
-                    colors: ['#c31432'],
-                    height: commonHeight,
-                });
-            }
-
-            if (activityChartRef && activityData?.labels?.length) {
-                activityChartInstance = new Chart(activityChartRef, {
-                    data: activityData,
-                    type: 'percentage',
-                    height: commonHeight,
-                    colors: ['#28a745', '#ffc107', '#17a2b8'],
-                });
-            }
-
-            // Ustaw interwał odświeżania co 1 minutę (60000ms)
-            // Dzięki temu user zobaczy nowe dane maksymalnie minutę po ich wygenerowaniu
-            refreshInterval = setInterval(refreshData, 60000);
+            // 6. Ustaw interwał odświeżania
+            refreshInterval = setInterval(refreshData, 30000); // 30 sekund
         } catch (e) {
-            console.error(e);
             error = 'Nie udało się pobrać danych z API. Sprawdź czy backend działa.';
-        } finally {
             loading = false;
         }
     });
 
     onDestroy(() => {
-        // Wyczyść interwał przy wyjściu ze strony, aby nie zwolnilo przeglądarki
-        if (refreshInterval) clearInterval(refreshInterval);
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+        }
     });
 </script>
 
@@ -225,6 +263,7 @@
         <div class="charts-grid">
             <div class="chart-container">
                 <h2>Poziom skupienia (%)</h2>
+                <!-- Upewnij się, że divy mają określony minimalny rozmiar -->
                 <div bind:this={focusChartRef}></div>
             </div>
 
