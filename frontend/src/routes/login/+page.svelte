@@ -1,6 +1,8 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
+    // DODANO: import get ze svelte/store
+    import { get } from 'svelte/store';
     import { accessToken, stopCamera } from '../../stores';
     import { getCookie } from '$lib/utils';
 
@@ -136,7 +138,7 @@
     });
 
     function checkLoginStatus() {
-        const token = getCookie('access_token');
+        const token = get(accessToken) || getCookie('access_token');
 
         if (token) {
             try {
