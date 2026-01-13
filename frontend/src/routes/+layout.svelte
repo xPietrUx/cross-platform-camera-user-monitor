@@ -67,12 +67,11 @@
     // Ten kod uruchomi się automatycznie, gdy zmieni się $accessToken
     $: {
         if ($accessToken) {
-            // Jeśli jest token i nie ma jeszcze licznika -> uruchom go
             if (!workInterval) {
                 console.log('Rozpoczynam odliczanie czasu pracy...');
                 workInterval = setInterval(() => {
                     showWorkNotification();
-                }, 5000); // 5000ms = 5s (zmień na 3600000 dla 1h)
+                }, 3600000); 
             }
         } else {
             // Jeśli token zniknął (wylogowanie) -> natychmiast zatrzymaj licznik
