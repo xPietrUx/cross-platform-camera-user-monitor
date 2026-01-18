@@ -216,16 +216,6 @@
                                 <circle cx="12" cy="7" r="4" />
                             </svg>
                         </div>
-                        <div
-                            class="user-status"
-                            class:online={user.online_status}
-                            class:offline={!user.online_status}
-                        >
-                            <span class="status-dot"></span>
-                            <span class="status-text"
-                                >{user.online_status ? 'Online' : 'Offline'}</span
-                            >
-                        </div>
                     </div>
 
                     <div class="user-info">

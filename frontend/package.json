@@ -57,17 +57,27 @@
         "win": {
             "target": "nsis",
             "icon": "static/icon.ico",
-            "signAndEditExecutable": false,
             "extraResources": [
                 {
                     "from": "../backend/dist/win/api.exe",
                     "to": "api.exe"
                 },
                 {
+                    "from": "../backend/app/database.db",
+                    "to": "database.db"
+                },
+                {
                     "from": "../.env",
                     "to": ".env"
                 }
             ]
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "runAfterFinish": true
         },
         "mac": {
             "target": [
@@ -80,6 +90,10 @@
                 {
                     "from": "../backend/dist/mac/api",
                     "to": "api"
+                },
+                {
+                    "from": "../backend/app/database.db",
+                    "to": "database.db"
                 },
                 {
                     "from": "../.env",
@@ -95,6 +109,10 @@
                 {
                     "from": "../backend/dist/linux/api",
                     "to": "api"
+                },
+                {
+                    "from": "../backend/app/database.db",
+                    "to": "database.db"
                 },
                 {
                     "from": "../.env",

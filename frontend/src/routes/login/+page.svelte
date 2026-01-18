@@ -1,6 +1,6 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-    import { onMount } from 'svelte';
+    import { onMount, onDestroy } from 'svelte';
     // DODANO: import get ze svelte/store
     import { get } from 'svelte/store';
     import { accessToken, stopCamera } from '../../stores';
@@ -107,19 +107,33 @@
     }
 
     async function handleLogout() {
-        try {
-            const token = getCookie('access_token');
-            if (token) {
-                await fetch('http://127.0.0.1:8000/auth/logout', {
+        const token = getCookie('access_token');
+
+        // Próba wylogowania po stronie serwera (tylko jeśli mamy token)
+        if (token) {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/auth/logout', {
                     method: 'POST',
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                 });
-            }
-        } catch (e) {}
 
+                if (!response.ok) {
+                    console.warn(`Błąd wylogowania na serwerze: Status ${response.status}`);
+                    // Jeśli status to 401 (Unauthorized), to znaczy że token i tak wygasł,
+                    // więc z punktu widzenia bezpieczeństwa sesja jest zakończona,
+                    // ale status w DB mógł zostać 'zawieszony' jako True.
+                } else {
+                    console.log('✅ Status online_status zaktualizowany w bazie.');
+                }
+            } catch (e) {
+                console.error('Błąd połączenia z backendem podczas wylogowywania:', e);
+            }
+        }
+
+        // Czyszczenie lokalne (zawsze się wykonuje)
         document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
 
         stopCamera();
@@ -133,8 +147,25 @@
         console.log('✅ Wylogowanie zakończone');
     }
 
+    // Dodaj to wewnątrz tagu <script>
+    function handleBeforeUnload() {
+        // Beacon API jest lepsze przy zamykaniu okna niż fetch, bo działa w tle po zamknięciu
+        const token = getCookie('access_token');
+        if (token && isLoggedIn) {
+            const blob = new Blob([JSON.stringify({})], { type: 'application/json' });
+            navigator.sendBeacon('http://127.0.0.1:8000/auth/logout-beacon?token=' + token, blob);
+        }
+    }
+
     onMount(() => {
         checkLoginStatus();
+        window.addEventListener('beforeunload', handleBeforeUnload);
+    });
+
+    onDestroy(() => {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        }
     });
 
     function checkLoginStatus() {
