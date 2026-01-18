@@ -17,7 +17,7 @@
 
         if (path === '/camera') {
             isCameraPageActive.set(true);
-            videoStreamUrl = null; 
+            videoStreamUrl = null;
             isVideoLoading = true;
         }
 
@@ -42,7 +42,6 @@
     let isVideoLoading = true;
     let imgElement: HTMLImageElement | null = null;
 
-
     let workInterval: any;
 
     onMount(() => {
@@ -64,7 +63,7 @@
                 console.log('Rozpoczynam odliczanie czasu pracy...');
                 workInterval = setInterval(() => {
                     showWorkNotification();
-                }, 3600000); 
+                }, 3600000);
             }
         } else {
             if (workInterval) {
@@ -118,9 +117,8 @@
         if (!$accessToken) return;
 
         if (Notification.permission === 'granted') {
-
             new Notification('Przerwa w pracy ☕🤎🥯🍪', {
-                body: 'Minęła godzina pracy. Czas na krótką przerwę!',,
+                body: 'Minęła godzina pracy. Czas na krótką przerwę!',
             });
         }
     }
