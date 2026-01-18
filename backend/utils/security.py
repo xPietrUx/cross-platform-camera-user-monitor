@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
@@ -6,12 +7,23 @@ from typing import Optional
 from passlib.context import CryptContext
 from jose import jwt
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-ENV_PATH = BASE_DIR / ".env"
+
+def _env_path() -> Path:
+    # PyInstaller: sys.executable wskazuje na api.exe
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / ".env"
+    # Dev: repo root (jak było)
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    return base_dir / ".env"
+
+
+ENV_PATH = _env_path()
 load_dotenv(dotenv_path=ENV_PATH)
+
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
+
 if not SECRET_KEY or not ALGORITHM or not ACCESS_TOKEN_EXPIRE_MINUTES:
     raise ValueError(f"Nie znaleziono zmiennej środowiskowej w pliku: {ENV_PATH}")
 

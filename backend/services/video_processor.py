@@ -1,17 +1,59 @@
 import cv2
 import time
+import signal
+import sys
+import os
+import asyncio
+from fastapi import Request
+from pathlib import Path
 from datetime import datetime
 from sqlmodel import Session, select
 from db.database import engine
-from db.models import FocusLog, DistractionStat  # <--- Dodaj DistractionStat
+from db.models import FocusLog, DistractionStat
+from threading import Lock
 
-# --- OPTYMALIZACJA 1: Ładowanie modeli raz (globalnie) ---
+
+def get_cascade_path(filename: str) -> str:
+    """
+    Zwraca ścieżkę do plików Haar.
+    - PyInstaller --onefile: dane są w sys._MEIPASS
+    - Fallback: obok api.exe (gdybyś kiedyś kopiował folder jako extraResources)
+    - Dev: backend/haarcascades
+    """
+    candidates: list[Path] = []
+
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass) / "haarcascades" / filename)
+
+        candidates.append(
+            Path(sys.executable).resolve().parent / "haarcascades" / filename
+        )
+    else:
+        candidates.append(
+            Path(__file__).resolve().parent.parent / "haarcascades" / filename
+        )
+        candidates.append(Path(cv2.data.haarcascades) / filename)
+
+    for p in candidates:
+        if p and p.exists():
+            return str(p)
+
+    raise RuntimeError(f"Nie znaleziono kaskady '{filename}'. Sprawdzono: {candidates}")
+
+
 face_cascade = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    get_cascade_path("haarcascade_frontalface_default.xml")
 )
-eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
+eye_cascade = cv2.CascadeClassifier(get_cascade_path("haarcascade_eye.xml"))
 
-# --- OPTYMALIZACJA 2: Globalna instancja kamery ---
+
+if face_cascade.empty():
+    raise RuntimeError("Nie można załadować kaskady twarzy")
+if eye_cascade.empty():
+    raise RuntimeError("Nie można załadować kaskady oczu")
+
 global_camera = None
 
 
@@ -22,8 +64,6 @@ def get_camera_instance():
     """
     global global_camera
     if global_camera is None or not global_camera.isOpened():
-        # --- OPTYMALIZACJA 3: Użycie cv2.CAP_DSHOW na Windows ---
-        # DirectShow jest znacznie szybszy przy starcie niż domyślny MSMF
         global_camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
         global_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -31,13 +71,11 @@ def get_camera_instance():
         global_camera.set(cv2.CAP_PROP_FPS, 30)
 
         if not global_camera.isOpened():
-            # Fallback jeśli DSHOW nie zadziała
             global_camera = cv2.VideoCapture(0)
 
     return global_camera
 
 
-# Rozszerzamy akumulator o liczniki rozproszeń
 user_accumulators = {}
 
 
@@ -47,7 +85,6 @@ def get_user_accumulator(user_id):
             "current_hour": None,
             "focused_frames": 0,
             "total_frames": 0,
-            # NOWE LICZNIKI (resetowane co godzinę przy zapisie)
             "dist_absent": 0,
             "dist_looking_away": 0,
             "dist_multiple_faces": 0,
@@ -67,7 +104,6 @@ def get_current_user_distractions(user_id):
     return {"absent": 0, "looking_away": 0, "multiple_faces": 0}
 
 
-# Globalne statystyki (chwilowe)
 current_focus_stats = {
     "is_focused": False,
     "focus_score": 100,
@@ -135,68 +171,96 @@ def get_focus_stats():
     return current_focus_stats
 
 
-def generate_frames(user_id: int):
+_active_streams_lock = Lock()
+_active_streams: set[int] = set()
+
+
+def start_user_stream(user_id: int) -> bool:
+    """Rezerwuje slot streamu dla usera. Zwraca False jeśli już streamuje."""
+    with _active_streams_lock:
+        if user_id in _active_streams:
+            return False
+        _active_streams.add(user_id)
+        return True
+
+
+def end_user_stream(user_id: int) -> None:
+    """Zwalnia slot streamu dla usera i ZAMYKA KAMERĘ jeśli nikt inny jej nie używa."""
+    global global_camera
+
+    with _active_streams_lock:
+        _active_streams.discard(user_id)
+
+        if len(_active_streams) == 0:
+            print("[INFO] Brak aktywnych użytkowników - zwalnianie zasobów kamery")
+            if global_camera is not None:
+                if global_camera.isOpened():
+                    global_camera.release()
+                global_camera = None
+
+
+shutdown_flag = False
+
+
+def signal_handler(sig, frame):
+    global shutdown_flag
+    print(f"[INFO] Otrzymano sygnał {sig}, zamykam generator...")
+    shutdown_flag = True
+
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+
+async def generate_frames(user_id: int, request: Request):
     """
-    Generator klatek wideo.
+    Generator klatek wideo z obsługą graceful shutdown.
     """
-    # Pobieramy otwartą już kamerę zamiast otwierać nową
+    global shutdown_flag
+
     cap = get_camera_instance()
 
     if not cap.isOpened():
+        end_user_stream(user_id)
         raise RuntimeError("Nie można otworzyć kamery")
 
     try:
         while True:
+            if await request.is_disconnected():
+                print(f"[INFO] Klient rozłączony user_id={user_id}")
+                break
+
+            if shutdown_flag:
+                break
+
             success, frame = cap.read()
             if not success:
-                # Jeśli nie uda się odczytać klatki, próbujemy ponownie (kamera może być zajęta)
-                time.sleep(0.1)
+                print(f"[WARNING] Nie udało się odczytać klatki dla user_id={user_id}")
+                await asyncio.sleep(0.1)
                 continue
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-            # ZMIANA 1: Bardziej rygorystyczna detekcja twarzy (minNeighbors=8)
-            # To sprawi, że profil twarzy nie będzie wykrywany jako "frontalface"
             faces = face_cascade.detectMultiScale(gray, 1.1, 8, minSize=(60, 60))
 
-            # Domyślnie brak skupienia
             is_focused = False
             eyes_detected = 0
-
-            # --- NOWA LOGIKA ROZPOZNAWANIA PRZYCZYNY ---
-            current_distraction = None  # "absent", "looking_away", "multiple_faces" lub None (jeśli skupiony)
+            current_distraction = None
 
             if len(faces) == 0:
                 current_distraction = "absent"
             elif len(faces) > 1:
                 current_distraction = "multiple_faces"
             else:
-                # Jest dokładnie 1 twarz
                 (x, y, w, h) = faces[0]
                 roi_gray = gray[y : y + h, x : x + w]
-                roi_color = frame[y : y + h, x : x + w]
-
-                # ZMIANA 2: Bardziej rygorystyczna detekcja oczu (minNeighbors=15)
-                # Eliminuje fałszywe detekcje cieni jako oczu
                 eyes = eye_cascade.detectMultiScale(roi_gray, 1.1, 15, minSize=(20, 20))
                 eyes_detected = len(eyes)
-
-                # --- RYSOWANIE ---
-                # Rysowanie prostokąta wokół twarzy
-                # cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-
-                # Rysowanie oczu
-                # for ex, ey, ew, eh in eyes:
-                #     cv2.rectangle(
-                #         roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 255), 2
-                #     )
 
                 if eyes_detected > 0:
                     is_focused = True
                 else:
                     current_distraction = "looking_away"
 
-            # --- LOGIKA AGREGACJI ---
             acc = get_user_accumulator(user_id)
             now = datetime.now()
             this_hour = now.replace(minute=0, second=0, microsecond=0)
@@ -204,7 +268,6 @@ def generate_frames(user_id: int):
             if acc["current_hour"] is None:
                 acc["current_hour"] = this_hour
 
-            # Zliczamy klatki rozproszeń
             if current_distraction == "absent":
                 acc["dist_absent"] += 1
             elif current_distraction == "looking_away":
@@ -212,14 +275,11 @@ def generate_frames(user_id: int):
             elif current_distraction == "multiple_faces":
                 acc["dist_multiple_faces"] += 1
 
-            # Zapis co godzinę (lub przy zmianie godziny)
             if this_hour != acc["current_hour"]:
                 total = acc["total_frames"]
                 if total > 0:
                     score = int((acc["focused_frames"] / total) * 100)
                     save_hourly_stat(user_id, acc["current_hour"], score)
-
-                    # Zapisujemy też rozproszenia
                     save_distractions(
                         user_id,
                         acc["current_hour"].date(),
@@ -238,14 +298,10 @@ def generate_frames(user_id: int):
             acc["total_frames"] += 1
             if is_focused:
                 acc["focused_frames"] += 1
-            # ------------------------
 
-            # Aktualizacja statystyk chwilowych (dla wykresu na żywo)
             current_focus_stats["is_focused"] = is_focused
             current_focus_stats["history"].append(1 if is_focused else 0)
 
-            # ZMIANA 3: Mniejszy bufor historii (30 klatek = ok. 1 sekunda)
-            # Dzięki temu wynik spadnie szybciej po odwróceniu głowy
             if len(current_focus_stats["history"]) > 30:
                 current_focus_stats["history"].pop(0)
 
@@ -255,51 +311,24 @@ def generate_frames(user_id: int):
                 )
                 current_focus_stats["focus_score"] = int(avg * 100)
 
-            # --- USUNIĘTO NAPISY ---
-            # Rysowanie statusu
-            # if is_focused:
-            #     color = (0, 255, 0)
-            #     status_text = "FOCUSED"
-            # elif current_distraction == "absent":
-            #     color = (0, 0, 255)
-            #     status_text = "ABSENT"
-            # elif current_distraction == "multiple_faces":
-            #     color = (255, 0, 255)  # Fioletowy
-            #     status_text = "MULTIPLE PEOPLE"
-            # else:
-            #     color = (0, 165, 255)
-            #     status_text = "LOOKING AWAY"
-
-            # cv2.putText(
-            #     frame,
-            #     f"Status: {status_text}",
-            #     (10, 30),
-            #     cv2.FONT_HERSHEY_SIMPLEX,
-            #     0.8,
-            #     color,
-            #     2,
-            # )
-            # cv2.putText(
-            #     frame,
-            #     f"Score: {current_focus_stats['focus_score']}%",
-            #     (10, 70),
-            #     cv2.FONT_HERSHEY_SIMPLEX,
-            #     0.8,
-            #     color,
-            #     2,
-            # )
-
-            ret, buffer = cv2.imencode(".jpg", frame)
+            ret, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if not ret:
+                print(f"[ERROR] Nie udało się zakodować klatki dla user_id={user_id}")
                 continue
-            yield (
-                b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-                + buffer.tobytes()
-                + b"\r\n"
+
+            frame_bytes = (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n"
             )
-            # Zmniejszamy opóźnienie pętli dla płynności
-            time.sleep(0.01)
-    except Exception as e:
-        print(f"Błąd generatora: {e}")
+
+            yield frame_bytes
+
+            await asyncio.sleep(0.01)
+
+    except asyncio.CancelledError:
+        print(f"[INFO] Strumień wideo anulowany dla user_id={user_id}")
+    except GeneratorExit:
+        return
     finally:
-        pass
+        end_user_stream(user_id)
+        print(f"[INFO] Generator zakończony dla user_id={user_id}")

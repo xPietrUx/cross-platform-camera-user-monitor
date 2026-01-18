@@ -14,7 +14,6 @@ from utils.security import (
 
 class AuthService:
     def register_user(self, user: User, session: Session) -> User:
-        # Sprawdź czy email już istniejehttp://localhost:5173/
         statement = select(User).where(User.email == user.email)
         existing_user = session.exec(statement).first()
 
@@ -24,25 +23,21 @@ class AuthService:
                 detail="Email already registered",
             )
 
-        # Zahaszuj hasło
         hashed_password = get_password_hash(user.password)
         user.password = hashed_password
 
         current_dateTime = datetime.now()
         user.created_at = current_dateTime.strftime("%d.%m.%Y")
 
-        # Zapisz w bazie
         session.add(user)
         session.commit()
         session.refresh(user)
         return user
 
     def authenticate_user(self, login_data, session: Session):
-        # Znajdź użytkownika
         statement = select(User).where(User.email == login_data.email)
         user = session.exec(statement).first()
 
-        # Weryfikacja hasła
         if not user or not verify_password(login_data.password, user.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -59,7 +54,6 @@ class AuthService:
             os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(ACCESS_TOKEN_EXPIRE_MINUTES))
         )
 
-        # Generowanie tokenu
         access_token_expires = timedelta(minutes=access_token_expires_minutes)
         access_token = create_access_token(
             data={"sub": user.email}, expires_delta=access_token_expires

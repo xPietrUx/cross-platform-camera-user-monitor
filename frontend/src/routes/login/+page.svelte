@@ -1,35 +1,34 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
-    import { onMount } from 'svelte';
-    import { accessToken } from '../../stores';
+    import { onMount, onDestroy } from 'svelte';
+    import { get } from 'svelte/store';
+    import { accessToken, stopCamera } from '../../stores';
+    import { getCookie } from '$lib/utils';
 
     let activeTab: 'login' | 'register' = 'login';
     let errorMessage = '';
-    let successMessage = ''; // NOWE: Zmienna na komunikat sukcesu
+    let successMessage = '';
 
-    // Zmienne do logowania
     let email = '';
     let password = '';
 
-    // Zmienne do rejestracji
     let regName = '';
     let regEmail = '';
     let regPassword = '';
     let regConfirmPassword = '';
 
-    // SCENARIUSZ 1: UŻYTKOWNIK ZALOGOWANY
     let isLoggedIn = false;
     let loggedUserEmail = '';
 
     function switchTab(tab: 'login' | 'register') {
         activeTab = tab;
         errorMessage = '';
-        successMessage = ''; // Czyścimy komunikaty przy zmianie zakładki
+        successMessage = ''; 
     }
 
     async function handleLogin() {
         errorMessage = '';
-        successMessage = ''; // Czyścimy sukces przy próbie logowania
+        successMessage = ''; 
         try {
             const response = await fetch('http://127.0.0.1:8000/auth/login', {
                 method: 'POST',
@@ -40,17 +39,11 @@
             if (response.ok) {
                 const data = await response.json();
 
-                // 1. Wyczyść stare ciasteczka
                 document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
                 document.cookie = 'access_token=; max-age=0; SameSite=Lax';
-
-                // 2. Ustaw nowe ciasteczko na 24h (86400 sekund)
                 document.cookie = `access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
-
-                // 3. Zaktualizuj store
                 accessToken.set(data.access_token);
 
-                // 4. Użyj goto zamiast window.location.href
                 await goto('/mainpage');
             } else {
                 const errorData = await response.json();
@@ -65,13 +58,12 @@
     async function handleRegister() {
         errorMessage = '';
         successMessage = '';
-        
+
         if (regPassword !== regConfirmPassword) {
             errorMessage = 'Hasła nie są identyczne.';
             return;
         }
 
-        // Rozdzielenie imienia i nazwiska (prosta logika dla modelu User backend)
         const parts = regName.trim().split(' ');
         const firstName = parts[0];
         const lastName = parts.length > 1 ? parts.slice(1).join(' ') : 'Brak';
@@ -90,7 +82,6 @@
             });
 
             if (response.ok) {
-                // POPRAWKA: Zamiast alert(), przełączamy zakładkę i ustawiamy wiadomość
                 switchTab('login');
                 successMessage = 'Konto utworzone pomyślnie! Możesz się zalogować.';
             } else {
@@ -104,43 +95,65 @@
     }
 
     async function handleLogout() {
-        try {
-            const token = getCookie('access_token');
-            if (token) {
-                await fetch('http://127.0.0.1:8000/auth/logout', {
+        const token = getCookie('access_token');
+
+        if (token) {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/auth/logout', {
                     method: 'POST',
                     headers: {
                         Authorization: `Bearer ${token}`,
                         'Content-Type': 'application/json',
                     },
                 });
+
+                if (!response.ok) {
+                    console.warn(`Błąd wylogowania na serwerze: Status ${response.status}`);
+                } else {
+                    console.log('✅ Status online_status zaktualizowany w bazie.');
+                }
+            } catch (e) {
+                console.error('Błąd połączenia z backendem podczas wylogowywania:', e);
             }
-        } catch (e) {
-            console.error('Błąd podczas wylogowywania z serwera:', e);
         }
 
         document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
 
-        accessToken.set(null);
+        stopCamera();
 
         isLoggedIn = false;
         loggedUserEmail = '';
         activeTab = 'login';
         successMessage = '';
+        errorMessage = '';
+
+        console.log('✅ Wylogowanie zakończone');
+    }
+
+    function handleBeforeUnload() {
+        const token = getCookie('access_token');
+        if (token && isLoggedIn) {
+            const blob = new Blob([JSON.stringify({})], { type: 'application/json' });
+            navigator.sendBeacon('http://127.0.0.1:8000/auth/logout-beacon?token=' + token, blob);
+        }
     }
 
     onMount(() => {
         checkLoginStatus();
+        window.addEventListener('beforeunload', handleBeforeUnload);
+    });
+
+    onDestroy(() => {
+        if (typeof window !== 'undefined') {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        }
     });
 
     function checkLoginStatus() {
-        const token = getCookie('access_token');
+        const token = get(accessToken) || getCookie('access_token');
 
-        // Synchronizacja store przy odświeżeniu strony logowania
         if (token) {
-            accessToken.set(token);
             try {
-                // Dekodowanie payload JWT (część po kropce)
                 const base64Url = token.split('.')[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
                 const jsonPayload = decodeURIComponent(
@@ -154,22 +167,31 @@
                 );
 
                 const payload = JSON.parse(jsonPayload);
-                // Ustawiamy zmienne, które przełączą widok w HTML
-                loggedUserEmail = payload.sub || 'Użytkownik';
-                isLoggedIn = true;
+
+                const now = Math.floor(Date.now() / 1000);
+                if (payload.exp && payload.exp > now) {
+                    loggedUserEmail = payload.sub || 'Użytkownik';
+                    isLoggedIn = true;
+                    accessToken.set(token);
+                } else {
+                    console.warn('Token wygasł - czyszczenie sesji');
+                    document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
+                    accessToken.set(null);
+                    isLoggedIn = false;
+                    loggedUserEmail = '';
+                }
             } catch (e) {
                 console.error('Błąd tokena:', e);
-                handleLogout();
+                document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
+                accessToken.set(null);
+                isLoggedIn = false;
+                loggedUserEmail = '';
             }
         } else {
             accessToken.set(null);
+            isLoggedIn = false;
+            loggedUserEmail = '';
         }
-    }
-
-    function getCookie(name: string) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop()?.split(';').shift();
     }
 </script>
 
@@ -313,7 +335,6 @@
         border: 1px solid rgba(255, 0, 0, 0.3);
     }
 
-    /* NOWE: Style dla komunikatu sukcesu */
     .success-msg {
         color: #28a745;
         text-align: center;
@@ -366,7 +387,6 @@
 <div class="login-container">
     <div class="login-card">
         {#if isLoggedIn}
-            <!-- SCENARIUSZ 1: UŻYTKOWNIK ZALOGOWANY -->
             <header class="card-header">
                 <h1>Witaj ponownie!</h1>
                 <p>Jesteś już zalogowany jako:</p>
@@ -384,7 +404,6 @@
                 <button class="logout-button" on:click={handleLogout}> Wyloguj się </button>
             </div>
         {:else}
-            <!-- SCENARIUSZ 2: UŻYTKOWNIK NIEZALOGOWANY -->
             <header class="card-header">
                 <h1>Zaloguj się lub utwórz nowe konto</h1>
             </header>
@@ -410,7 +429,6 @@
                 <div class="error-msg">{errorMessage}</div>
             {/if}
 
-            <!-- NOWE: Wyświetlanie komunikatu sukcesu -->
             {#if successMessage}
                 <div class="success-msg">{successMessage}</div>
             {/if}
