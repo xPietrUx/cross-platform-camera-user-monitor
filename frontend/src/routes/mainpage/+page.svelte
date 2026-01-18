@@ -29,6 +29,13 @@
     let loading = true;
     let refreshInterval: any;
 
+    // Inicjalizacja daty dzisiejszej (YYYY-MM-DD wg czasu lokalnego użytkownika)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    let selectedDate = `${year}-${month}-${day}`;
+
     async function authedJson<T>(url: string, token: string): Promise<T> {
         const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -100,13 +107,33 @@
         try {
             const startTime = performance.now();
 
+            // Zmiana: Dodajemy parametr ?date= tylko do pierwszego zapytania (historia skupienia)
             const [f, p, a] = await Promise.all([
-                authedJson<ChartData>('http://127.0.0.1:8000/video/history', token),
+                authedJson<ChartData>(`http://127.0.0.1:8000/video/history?date=${selectedDate}`, token),
                 authedJson<ChartData>('http://127.0.0.1:8000/video/stats/daily', token),
                 authedJson<ChartData>('http://127.0.0.1:8000/video/stats/activity', token),
             ]);
 
             const endTime = performance.now();
+
+            // Formatowanie etykiet czasowych dla wykresu skupienia (godzina:minuta)
+            if (f && f.labels) {
+                f.labels = f.labels.map((label) => {
+                    const date = new Date(label);
+                    // Jeśli to nie jest poprawna data, zwróć oryginał
+                    if (isNaN(date.getTime())) return label;
+                    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                });
+            }
+
+            // Formatowanie etykiet dat dla wykresu produktywności (dzień.miesiąc)
+            if (p && p.labels) {
+                p.labels = p.labels.map((label) => {
+                    const date = new Date(label);
+                    if (isNaN(date.getTime())) return label;
+                    return date.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+                });
+            }
 
             focusData = f;
             productivityData = p;
@@ -262,8 +289,49 @@
     {:else}
         <div class="charts-grid">
             <div class="chart-container">
-                <h2>Poziom skupienia (%)</h2>
-                <!-- Upewnij się, że divy mają określony minimalny rozmiar -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-sm);">
+                    <h2 style="margin: 0;">Poziom skupienia (%)</h2>
+                    
+                    <!-- Kontener dla niestandardowego pola daty -->
+                    <div style="position: relative; display: inline-block;">
+                        <!-- 1. Wyświetlana etykieta (tylko do czytania) -->
+                        <div style="
+                            background: rgba(255, 255, 255, 0.1);
+                            border: 1px solid rgba(255, 255, 255, 0.2);
+                            color: white;
+                            padding: 4px 12px;
+                            border-radius: 4px;
+                            font-size: 0.9rem;
+                            pointer-events: none; /* Kluczowe: kliknięcia przechodzą do inputa niżej */
+                            min-width: 100px;
+                            text-align: center;
+                        ">
+                            <!-- Formatujemy datę YYYY-MM-DD na polski D.MM.YYYY dla ładnego wyglądu -->
+                            {selectedDate.split('-').reverse().join('.')}
+                            <span style="font-size: 0.8em; opacity: 0.7; margin-left: 6px;">📅</span>
+                        </div>
+
+                        <!-- 2. Niewidzialny input rozciągnięty na wierzchu -->
+                        <input 
+                            type="date"
+                            bind:value={selectedDate}
+                            on:change={() => refreshData()}
+                            on:click={(e) => e.currentTarget.showPicker()}
+                            style="
+                                position: absolute;
+                                top: 0;
+                                left: 0;
+                                width: 100%;
+                                height: 100%;
+                                opacity: 0; /* Całkowicie niewidoczny */
+                                cursor: pointer;
+                                z-index: 1;
+                            "
+                            title="Zmień dzień"
+                        />
+                    </div>
+                </div>
+                <!-- Kontener na sam wykres -->
                 <div bind:this={focusChartRef}></div>
             </div>
 
@@ -273,7 +341,7 @@
             </div>
 
             <div class="chart-container">
-                <h2>Podział aktywności</h2>
+                <h2>Aktywność</h2>
                 <div bind:this={activityChartRef}></div>
             </div>
         </div>

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
-from typing import List
+from typing import List, Optional  # Zaktualizuj import
 from sqlmodel import Session, select
 from services import video_processor
 from dependencies import get_current_user
@@ -90,20 +90,38 @@ def get_video_stats():
 
 @router.get("/history")
 def get_focus_history(
+    date: Optional[str] = None,  # Dodajemy opcjonalny parametr
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Zwraca historię skupienia TYLKO dla zalogowanego użytkownika.
+    Zwraca historię skupienia dla zalogowanego użytkownika.
+    Można podać parametr ?date=YYYY-MM-DD
     """
-    cache_key = f"history_{current_user.id}"
+    # 1. Ustalanie daty (z parametru lub dzisiejsza)
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            target_date = datetime.now().date()
+    else:
+        target_date = datetime.now().date()
+
+    # 2. Cache musi uwzględniać datę w kluczu
+    cache_key = f"history_{current_user.id}_{target_date}"
 
     def compute():
+        # 3. Filtrowanie po konkretnym dniu (pełna doba)
+        day_start = datetime.combine(target_date, datetime.min.time())
+        next_day = day_start + timedelta(days=1)
+
         statement = (
             select(FocusLog)
             .where(FocusLog.user_id == current_user.id)
+            .where(FocusLog.timestamp >= day_start)  # Od początku dnia...
+            .where(FocusLog.timestamp < next_day)  # ...do początku następnego
             .order_by(FocusLog.timestamp.desc())
-            .limit(8)
+            # Usuwamy limit lub zwiększamy go (np. 24 wpisy godzinowe)
         )
         results = session.exec(statement).all()
 
