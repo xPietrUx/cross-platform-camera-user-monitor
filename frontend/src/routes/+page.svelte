@@ -6,7 +6,6 @@
 
     let currentSlide = 0;
 
-    // DODAJ te zmienne (używane w checkLoginStatus)
     let isLoggedIn = false;
     let loggedUserEmail = '';
 
@@ -69,7 +68,7 @@
 
     onMount(() => {
         interval = setInterval(autoNextSlide, 5000);
-        checkLoginStatus(); // <--- PRZENIEŚ TUTAJ (wywołaj w onMount)
+        checkLoginStatus(); 
         return () => clearInterval(interval);
     });
 
@@ -146,7 +145,7 @@
 
     .welcome-header {
         width: 100%;
-        padding-top: 3vh; /* Dodano padding, aby odsunąć od góry */
+        padding-top: 3vh;
     }
 
     .welcome-header h1 {
@@ -188,12 +187,11 @@
         visibility: visible;
     }
 
-    /* Styl dla tekstu karuzeli */
     .carousel-text-content {
         position: relative;
         width: 100%;
         max-width: 800px;
-        flex-grow: 1; /* Pozwala zająć dostępną przestrzeń */
+        flex-grow: 1; 
         display: flex;
         align-items: center;
         justify-content: center;
@@ -202,7 +200,7 @@
     .text-slide {
         position: absolute;
         width: 100%;
-        height: auto; /* Wysokość dopasuje się do treści */
+        height: auto; 
         opacity: 0;
         visibility: hidden;
         transition: opacity 0.5s ease-in-out;
@@ -228,20 +226,20 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: var(--spacing-md); /* Zmniejszony odstęp */
+        gap: var(--spacing-md); 
         width: 100%;
         padding-bottom: 2vh;
     }
 
-    /* Nowy kontener dla głównego rzędu przycisków */
+  
     .main-controls {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: var(--spacing-lg); /* Odstęp między przyciskami */
+        gap: var(--spacing-lg); 
     }
 
-    /* Nowa klasa dla przycisków nawigacyjnych */
+  
     .nav-button {
         background: rgba(0, 0, 0, 0.3);
         color: var(--text-color);
@@ -252,7 +250,7 @@
         font-size: 1.5rem;
         line-height: 45px;
         transition: background-color var(--animation-time);
-        flex-shrink: 0; /* Zapobiega kurczeniu się przycisków */
+        flex-shrink: 0; 
     }
 
     .nav-button:hover {
@@ -294,7 +292,6 @@
     }
 </style>
 
-<!-- Karuzela jako tło -->
 <div class="background-carousel">
     <div class="carousel">
         {#each slides as slide, i}
@@ -307,14 +304,12 @@
     </div>
 </div>
 
-<!-- Treść na wierzchu -->
 <div class="page-container">
     <header class="welcome-header">
         <h1>Witaj w Monitorze Aktywności</h1>
         <p>Twoje centrum dowodzenia produktywnością</p>
     </header>
 
-    <!-- Dynamiczny tekst karuzeli na środku -->
     <div class="carousel-text-content">
         {#each slides as slide, i}
             <div class="text-slide" class:active={currentSlide === i}>
@@ -324,7 +319,6 @@
         {/each}
     </div>
 
-    <!-- Kontrolki i przycisk na dole -->
     <footer class="page-footer">
         <div class="main-controls">
             <button class="nav-button" on:click={prevSlide} aria-label="Poprzedni slajd"

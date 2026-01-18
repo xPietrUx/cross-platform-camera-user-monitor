@@ -6,7 +6,6 @@
     import { isCameraPageActive, accessToken } from '../stores';
     import { getCookie } from '$lib/utils';
 
-    // --- Logika Menu ---
     let isMenuExpanded = false;
 
     function toggleMenu() {
@@ -16,10 +15,9 @@
     async function nav(e: MouseEvent, path: string) {
         e.preventDefault();
 
-        // WAŻNE: jeśli przechodzisz do /camera, zamknij mini-stream ZANIM strona /camera odpali swój stream
         if (path === '/camera') {
             isCameraPageActive.set(true);
-            videoStreamUrl = null; // wymusi odmontowanie <img> i przerwanie requestu
+            videoStreamUrl = null; 
             isVideoLoading = true;
         }
 
@@ -40,15 +38,13 @@
         await goto('/mainpage');
     }
 
-    // --- Logika Kamery (globalny podgląd) ---
     let videoStreamUrl: string | null = null;
     let isVideoLoading = true;
     let imgElement: HTMLImageElement | null = null;
 
-    // Zmienna do przechowywania identyfikatora interwału
+
     let workInterval: any;
 
-    // 1. ZREDUKOWANY onMount - tylko inicjalizacja
     onMount(() => {
         const token = getCookie('access_token');
         accessToken.set(token);
@@ -57,14 +53,11 @@
             Notification.requestPermission();
         }
 
-        // Return cleanup function
         return () => {
             if (workInterval) clearInterval(workInterval);
         };
     });
 
-    // 2. REAKTYWNE zarządzanie interwałem
-    // Ten kod uruchomi się automatycznie, gdy zmieni się $accessToken
     $: {
         if ($accessToken) {
             if (!workInterval) {
@@ -74,7 +67,6 @@
                 }, 3600000); 
             }
         } else {
-            // Jeśli token zniknął (wylogowanie) -> natychmiast zatrzymaj licznik
             if (workInterval) {
                 console.log('Zatrzymano odliczanie (wylogowanie).');
                 clearInterval(workInterval);
@@ -83,24 +75,20 @@
         }
     }
 
-    // URL zawsze gdy jest token (NIE uzależniaj od isCameraPageActive)
     $: {
         if ($accessToken) {
             videoStreamUrl = `http://127.0.0.1:8000/video/stream?token=${$accessToken}`;
             isVideoLoading = true;
         } else {
-            // Wymuś zatrzymanie strumienia jeśli img element istnieje
             if (imgElement) {
                 imgElement.src = '';
                 imgElement.srcset = '';
                 imgElement.removeAttribute('src');
 
-                // Wymuś przeładowanie przeglądarki aby przerwać request
                 imgElement.onerror = null;
                 imgElement.onload = null;
             }
 
-            // Wyczyść URL - to usunie element <img> z DOM
             videoStreamUrl = null;
             isVideoLoading = true;
         }
@@ -116,7 +104,6 @@
         isVideoLoading = true;
     }
 
-    // Cleanup przy odmontowaniu komponentu
     onDestroy(() => {
         if (imgElement) {
             imgElement.src = '';
@@ -128,22 +115,18 @@
     });
 
     function showWorkNotification() {
-        // Dodatkowe zabezpieczenie
         if (!$accessToken) return;
 
         if (Notification.permission === 'granted') {
-            // tag: 'work-break' sprawia, że powiadomienia nie będą się piętrzyć
-            // (nowe zastąpi stare zamiast tworzyć listę)
+
             new Notification('Przerwa w pracy ☕🤎🥯🍪', {
-                body: 'Minęła godzina pracy. Czas na krótką przerwę!',
-                // tag: 'work-break',
+                body: 'Minęła godzina pracy. Czas na krótką przerwę!',,
             });
         }
     }
 </script>
 
 <style>
-    /* --- Style Menu --- */
     .layout {
         display: flex;
         min-height: 100vh;
@@ -255,7 +238,6 @@
         }
     }
 
-    /* --- Style dla kamery --- */
     .global-camera-preview {
         position: fixed;
         bottom: 20px;
@@ -385,7 +367,6 @@
     }
 </style>
 
-<!-- Sidebar Nav -->
 <div class="layout">
     <nav class="sidebar" class:collapsed={!isMenuExpanded}>
         <button class="toggle-btn" on:click={toggleMenu} aria-label="Przełącz menu">
@@ -475,7 +456,6 @@
         <slot />
     </main>
 
-    <!-- Global Camera Preview -->
     {#if videoStreamUrl}
         <div
             class="global-camera-preview"

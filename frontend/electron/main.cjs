@@ -4,19 +4,12 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 
-// Linux (VM): stabilizacja GPU/VAAPI
 if (process.platform === 'linux') {
-    // Wymuś software OpenGL (działa lepiej w VM bez 3D accel)
     app.commandLine.appendSwitch('use-gl', 'swiftshader');
-
-    // Wyłącz VAAPI i GPU (różne kombinacje w zależności od środowiska)
     app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecoder');
     app.commandLine.appendSwitch('disable-gpu');
     app.commandLine.appendSwitch('disable-gpu-compositing');
     app.commandLine.appendSwitch('disable-gpu-sandbox');
-
-    // Opcjonalnie (mniej bezpieczne, ale pomaga w części VM/CI):
-    // app.commandLine.appendSwitch('no-sandbox');
 }
 
 protocol.registerSchemesAsPrivileged([
@@ -66,7 +59,6 @@ if (!gotTheLock) {
             return;
         }
 
-        // Linux/Mac: upewnij się, że plik jest wykonywalny
         if (process.platform !== 'win32') {
             try {
                 fs.chmodSync(backendPath, 0o755);
@@ -99,7 +91,6 @@ if (!gotTheLock) {
             console.log('Zamykam backend...');
 
             if (process.platform === 'win32') {
-                // Windows: użyj taskkill
                 const { exec } = require('child_process');
                 exec(`taskkill /pid ${backendProcess.pid} /T /F`, (error) => {
                     if (error) {
@@ -110,7 +101,6 @@ if (!gotTheLock) {
                     backendProcess = null;
                 });
             } else {
-                // Linux/Mac: SIGTERM
                 backendProcess.kill('SIGTERM');
                 setTimeout(() => {
                     if (backendProcess && !backendProcess.killed) {
@@ -123,27 +113,22 @@ if (!gotTheLock) {
     }
 
     function registerAppProtocol() {
-        // UWAGA: build jest w app.asar/build (u Ciebie działa z loadURL na app.asar)
         const buildRoot = path.join(app.getAppPath(), 'build');
 
         protocol.registerFileProtocol('app', (request, callback) => {
             try {
                 const u = new URL(request.url);
 
-                // pathname np. "/", "/mainpage", "/_app/immutable/....js"
                 let relPath = decodeURIComponent(u.pathname || '/');
 
-                // katalog/route -> fallback na index.html (SPA)
                 if (relPath === '/' || relPath === '') relPath = '/index.html';
 
                 let resolved = path.join(buildRoot, relPath);
 
-                // harden: wyjście poza buildRoot
                 if (!resolved.startsWith(buildRoot)) {
                     resolved = path.join(buildRoot, 'index.html');
                 }
 
-                // jeśli nie istnieje (np. /mainpage), albo to katalog -> index.html
                 if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) {
                     resolved = path.join(buildRoot, 'index.html');
                 }
@@ -179,7 +164,6 @@ if (!gotTheLock) {
         );
 
         if (app.isPackaged) {
-            // Ładuj root, żeby SvelteKit widział pathname = "/" (a nie "/index.html")
             const indexURL = 'app://-/';
             console.log('Ładuję index.html z:', indexURL);
             mainWindow.loadURL(indexURL);

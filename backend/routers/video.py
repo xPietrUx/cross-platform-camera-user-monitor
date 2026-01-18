@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse
-from typing import List, Optional  # Zaktualizuj import
+from typing import List, Optional
 from sqlmodel import Session, select
 from services import video_processor
 from dependencies import get_current_user
@@ -13,9 +13,8 @@ import time
 
 router = APIRouter()
 
-# Cache dla wyników (ważny przez 10 sekund)
 _cache = {}
-_cache_ttl = 10  # sekundy
+_cache_ttl = 10
 
 
 def get_cached_or_compute(key: str, compute_fn):
@@ -26,7 +25,6 @@ def get_cached_or_compute(key: str, compute_fn):
         if now - timestamp < _cache_ttl:
             return data
 
-    # Oblicz na nowo
     result = compute_fn()
     _cache[key] = (result, now)
     return result
@@ -34,7 +32,6 @@ def get_cached_or_compute(key: str, compute_fn):
 
 @router.get("/cameras", response_model=List[dict])
 def get_cameras():
-    # Zwraca listę dostępnych kamer w systemie.
     return [
         {"id": "cam1", "name": "Zintegrowana kamera"},
         {"id": "cam2", "name": "Kamera USB"},
@@ -43,7 +40,6 @@ def get_cameras():
 
 @router.post("/cameras/select")
 def select_camera():
-    # Pozwala wybrać kamerę, która będzie używana do śledzenia.
     return {"message": "Wybrano kamerę: cam1"}
 
 
@@ -90,7 +86,7 @@ def get_video_stats():
 
 @router.get("/history")
 def get_focus_history(
-    date: Optional[str] = None,  # Dodajemy opcjonalny parametr
+    date: Optional[str] = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -98,7 +94,6 @@ def get_focus_history(
     Zwraca historię skupienia dla zalogowanego użytkownika.
     Można podać parametr ?date=YYYY-MM-DD
     """
-    # 1. Ustalanie daty (z parametru lub dzisiejsza)
     if date:
         try:
             target_date = datetime.strptime(date, "%Y-%m-%d").date()
@@ -107,21 +102,18 @@ def get_focus_history(
     else:
         target_date = datetime.now().date()
 
-    # 2. Cache musi uwzględniać datę w kluczu
     cache_key = f"history_{current_user.id}_{target_date}"
 
     def compute():
-        # 3. Filtrowanie po konkretnym dniu (pełna doba)
         day_start = datetime.combine(target_date, datetime.min.time())
         next_day = day_start + timedelta(days=1)
 
         statement = (
             select(FocusLog)
             .where(FocusLog.user_id == current_user.id)
-            .where(FocusLog.timestamp >= day_start)  # Od początku dnia...
-            .where(FocusLog.timestamp < next_day)  # ...do początku następnego
+            .where(FocusLog.timestamp >= day_start)
+            .where(FocusLog.timestamp < next_day)
             .order_by(FocusLog.timestamp.desc())
-            # Usuwamy limit lub zwiększamy go (np. 24 wpisy godzinowe)
         )
         results = session.exec(statement).all()
 
@@ -198,7 +190,6 @@ def get_distraction_stats(
     """
     today = datetime.now().date()
 
-    # 1. Pobierz dane zapisane w bazie (z poprzednich godzin dzisiaj)
     statement = select(DistractionStat).where(
         DistractionStat.user_id == current_user.id, DistractionStat.date == today
     )
@@ -210,14 +201,12 @@ def get_distraction_stats(
         if stat.distraction_type in totals:
             totals[stat.distraction_type] += stat.count
 
-    # 2. Dodaj dane "na żywo" z obecnej godziny (z pamięci RAM)
     live_stats = video_processor.get_current_user_distractions(current_user.id)
 
     totals["absent"] += live_stats["absent"]
     totals["looking_away"] += live_stats["looking_away"]
     totals["multiple_faces"] += live_stats["multiple_faces"]
 
-    # Formatowanie dla wykresu
     return {
         "labels": ["Brak obecności", "Odwrócenie wzroku", "Inne osoby"],
         "datasets": [

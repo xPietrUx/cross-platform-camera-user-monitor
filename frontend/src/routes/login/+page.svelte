@@ -1,7 +1,6 @@
 <script lang="ts">
     import { goto } from '$app/navigation';
     import { onMount, onDestroy } from 'svelte';
-    // DODANO: import get ze svelte/store
     import { get } from 'svelte/store';
     import { accessToken, stopCamera } from '../../stores';
     import { getCookie } from '$lib/utils';
@@ -10,29 +9,26 @@
     let errorMessage = '';
     let successMessage = '';
 
-    // Zmienne do logowania
     let email = '';
     let password = '';
 
-    // Zmienne do rejestracji
     let regName = '';
     let regEmail = '';
     let regPassword = '';
     let regConfirmPassword = '';
 
-    // SCENARIUSZ 1: UŻYTKOWNIK ZALOGOWANY
     let isLoggedIn = false;
     let loggedUserEmail = '';
 
     function switchTab(tab: 'login' | 'register') {
         activeTab = tab;
         errorMessage = '';
-        successMessage = ''; // Czyścimy komunikaty przy zmianie zakładki
+        successMessage = ''; 
     }
 
     async function handleLogin() {
         errorMessage = '';
-        successMessage = ''; // Czyścimy sukces przy próbie logowania
+        successMessage = ''; 
         try {
             const response = await fetch('http://127.0.0.1:8000/auth/login', {
                 method: 'POST',
@@ -43,17 +39,11 @@
             if (response.ok) {
                 const data = await response.json();
 
-                // 1. Wyczyść stare ciasteczka
                 document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
                 document.cookie = 'access_token=; max-age=0; SameSite=Lax';
-
-                // 2. Ustaw nowe ciasteczko na 24h (86400 sekund)
                 document.cookie = `access_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
-
-                // 3. Zaktualizuj store
                 accessToken.set(data.access_token);
 
-                // 4. Użyj goto zamiast window.location.href
                 await goto('/mainpage');
             } else {
                 const errorData = await response.json();
@@ -74,7 +64,6 @@
             return;
         }
 
-        // Rozdzielenie imienia i nazwiska (prosta logika dla modelu User backend)
         const parts = regName.trim().split(' ');
         const firstName = parts[0];
         const lastName = parts.length > 1 ? parts.slice(1).join(' ') : 'Brak';
@@ -93,7 +82,6 @@
             });
 
             if (response.ok) {
-                // POPRAWKA: Zamiast alert(), przełączamy zakładkę i ustawiamy wiadomość
                 switchTab('login');
                 successMessage = 'Konto utworzone pomyślnie! Możesz się zalogować.';
             } else {
@@ -109,7 +97,6 @@
     async function handleLogout() {
         const token = getCookie('access_token');
 
-        // Próba wylogowania po stronie serwera (tylko jeśli mamy token)
         if (token) {
             try {
                 const response = await fetch('http://127.0.0.1:8000/auth/logout', {
@@ -122,9 +109,6 @@
 
                 if (!response.ok) {
                     console.warn(`Błąd wylogowania na serwerze: Status ${response.status}`);
-                    // Jeśli status to 401 (Unauthorized), to znaczy że token i tak wygasł,
-                    // więc z punktu widzenia bezpieczeństwa sesja jest zakończona,
-                    // ale status w DB mógł zostać 'zawieszony' jako True.
                 } else {
                     console.log('✅ Status online_status zaktualizowany w bazie.');
                 }
@@ -133,7 +117,6 @@
             }
         }
 
-        // Czyszczenie lokalne (zawsze się wykonuje)
         document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
 
         stopCamera();
@@ -147,9 +130,7 @@
         console.log('✅ Wylogowanie zakończone');
     }
 
-    // Dodaj to wewnątrz tagu <script>
     function handleBeforeUnload() {
-        // Beacon API jest lepsze przy zamykaniu okna niż fetch, bo działa w tle po zamknięciu
         const token = getCookie('access_token');
         if (token && isLoggedIn) {
             const blob = new Blob([JSON.stringify({})], { type: 'application/json' });
@@ -187,14 +168,12 @@
 
                 const payload = JSON.parse(jsonPayload);
 
-                // Sprawdź ważność tokena
                 const now = Math.floor(Date.now() / 1000);
                 if (payload.exp && payload.exp > now) {
                     loggedUserEmail = payload.sub || 'Użytkownik';
                     isLoggedIn = true;
                     accessToken.set(token);
                 } else {
-                    // Token wygasł – wyczyść ciasteczko i store
                     console.warn('Token wygasł - czyszczenie sesji');
                     document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
                     accessToken.set(null);
@@ -203,7 +182,6 @@
                 }
             } catch (e) {
                 console.error('Błąd tokena:', e);
-                // Token uszkodzony – wyczyść ciasteczko i store
                 document.cookie = 'access_token=; path=/; max-age=0; SameSite=Lax';
                 accessToken.set(null);
                 isLoggedIn = false;
@@ -357,7 +335,6 @@
         border: 1px solid rgba(255, 0, 0, 0.3);
     }
 
-    /* NOWE: Style dla komunikatu sukcesu */
     .success-msg {
         color: #28a745;
         text-align: center;
@@ -410,7 +387,6 @@
 <div class="login-container">
     <div class="login-card">
         {#if isLoggedIn}
-            <!-- SCENARIUSZ 1: UŻYTKOWNIK ZALOGOWANY -->
             <header class="card-header">
                 <h1>Witaj ponownie!</h1>
                 <p>Jesteś już zalogowany jako:</p>
@@ -428,7 +404,6 @@
                 <button class="logout-button" on:click={handleLogout}> Wyloguj się </button>
             </div>
         {:else}
-            <!-- SCENARIUSZ 2: UŻYTKOWNIK NIEZALOGOWANY -->
             <header class="card-header">
                 <h1>Zaloguj się lub utwórz nowe konto</h1>
             </header>
@@ -454,7 +429,6 @@
                 <div class="error-msg">{errorMessage}</div>
             {/if}
 
-            <!-- NOWE: Wyświetlanie komunikatu sukcesu -->
             {#if successMessage}
                 <div class="success-msg">{successMessage}</div>
             {/if}

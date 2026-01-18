@@ -17,19 +17,16 @@
     let prodChartRef: HTMLElement;
     let activityChartRef: HTMLElement;
 
-    // Instancje wykresów
     let focusChartInstance: any = null;
     let prodChartInstance: any = null;
     let activityChartInstance: any = null;
 
-    // Zmienna na klasę biblioteki (ładowana dynamicznie)
     let ChartLibrary: any = null;
 
     let error: string | null = null;
     let loading = true;
     let refreshInterval: any;
 
-    // Inicjalizacja daty dzisiejszej (YYYY-MM-DD wg czasu lokalnego użytkownika)
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -48,7 +45,6 @@
             return;
         }
 
-        // Sprawdź czy elementy DOM są gotowe
         if (!focusChartRef || !prodChartRef || !activityChartRef) {
             console.warn('⚠️ Elementy DOM wykresów nie są jeszcze gotowe');
             return;
@@ -56,7 +52,6 @@
 
         const commonHeight = 240;
 
-        // --- Wykres 1: Skupienie ---
         if (focusChartInstance) {
             if (focusData) {
                 focusChartInstance.update(focusData);
@@ -71,7 +66,6 @@
             });
         }
 
-        // --- Wykres 2: Produktywność ---
         if (prodChartInstance) {
             if (productivityData) {
                 prodChartInstance.update(productivityData);
@@ -85,7 +79,6 @@
             });
         }
 
-        // --- Wykres 3: Aktywność ---
         if (activityChartInstance) {
             if (activityData) {
                 activityChartInstance.update(activityData);
@@ -107,7 +100,6 @@
         try {
             const startTime = performance.now();
 
-            // Zmiana: Dodajemy parametr ?date= tylko do pierwszego zapytania (historia skupienia)
             const [f, p, a] = await Promise.all([
                 authedJson<ChartData>(`http://127.0.0.1:8000/video/history?date=${selectedDate}`, token),
                 authedJson<ChartData>('http://127.0.0.1:8000/video/stats/daily', token),
@@ -116,17 +108,14 @@
 
             const endTime = performance.now();
 
-            // Formatowanie etykiet czasowych dla wykresu skupienia (godzina:minuta)
             if (f && f.labels) {
                 f.labels = f.labels.map((label) => {
                     const date = new Date(label);
-                    // Jeśli to nie jest poprawna data, zwróć oryginał
                     if (isNaN(date.getTime())) return label;
                     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 });
             }
 
-            // Formatowanie etykiet dat dla wykresu produktywności (dzień.miesiąc)
             if (p && p.labels) {
                 p.labels = p.labels.map((label) => {
                     const date = new Date(label);
@@ -139,10 +128,8 @@
             productivityData = p;
             activityData = a;
 
-            // WAŻNE: Poczekaj na zakończenie renderowania DOM
             await tick();
 
-            // Spróbuj zaktualizować lub stworzyć wykresy
             updateCharts();
         } catch (e) {
             console.error('❌ Błąd odświeżania danych:', e);
@@ -162,21 +149,12 @@
         }
 
         try {
-            // 1. Najpierw ładujemy bibliotekę wykresów
             const mod = await import('frappe-charts/dist/frappe-charts.min.esm');
             ChartLibrary = mod.Chart;
-
-            // 2. Ukryj loader (aby wyrenderować kontenery wykresów)
             loading = false;
-
-            // 3. Poczekaj na renderowanie DOM
             await tick();
-
-            // 5. NATYCHMIAST pobierz dane (to wywoła updateCharts wewnątrz)
             await refreshData();
-
-            // 6. Ustaw interwał odświeżania
-            refreshInterval = setInterval(refreshData, 30000); // 30 sekund
+            refreshInterval = setInterval(refreshData, 30000); 
         } catch (e) {
             error = 'Nie udało się pobrać danych z API. Sprawdź czy backend działa.';
             loading = false;
@@ -244,8 +222,6 @@
         color: rgba(255, 255, 255, 0.9);
     }
 
-    /* --- STYLE DLA FRAPPE CHARTS (OVERRIDE) --- */
-
     :global(.chart-container .frappe-chart text) {
         fill: #ffffff !important;
     }
@@ -291,10 +267,7 @@
             <div class="chart-container">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-sm);">
                     <h2 style="margin: 0;">Poziom skupienia (%)</h2>
-                    
-                    <!-- Kontener dla niestandardowego pola daty -->
                     <div style="position: relative; display: inline-block;">
-                        <!-- 1. Wyświetlana etykieta (tylko do czytania) -->
                         <div style="
                             background: rgba(255, 255, 255, 0.1);
                             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -302,16 +275,14 @@
                             padding: 4px 12px;
                             border-radius: 4px;
                             font-size: 0.9rem;
-                            pointer-events: none; /* Kluczowe: kliknięcia przechodzą do inputa niżej */
+                            pointer-events: none;
                             min-width: 100px;
                             text-align: center;
                         ">
-                            <!-- Formatujemy datę YYYY-MM-DD na polski D.MM.YYYY dla ładnego wyglądu -->
                             {selectedDate.split('-').reverse().join('.')}
                             <span style="font-size: 0.8em; opacity: 0.7; margin-left: 6px;">📅</span>
                         </div>
 
-                        <!-- 2. Niewidzialny input rozciągnięty na wierzchu -->
                         <input 
                             type="date"
                             bind:value={selectedDate}
@@ -331,7 +302,6 @@
                         />
                     </div>
                 </div>
-                <!-- Kontener na sam wykres -->
                 <div bind:this={focusChartRef}></div>
             </div>
 

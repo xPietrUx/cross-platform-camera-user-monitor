@@ -34,7 +34,6 @@ def get_cascade_path(filename: str) -> str:
         candidates.append(
             Path(__file__).resolve().parent.parent / "haarcascades" / filename
         )
-        # opcjonalny fallback do cv2.data (dev)
         candidates.append(Path(cv2.data.haarcascades) / filename)
 
     for p in candidates:
@@ -49,13 +48,12 @@ face_cascade = cv2.CascadeClassifier(
 )
 eye_cascade = cv2.CascadeClassifier(get_cascade_path("haarcascade_eye.xml"))
 
-# Sprawdź czy załadowały się poprawnie
+
 if face_cascade.empty():
     raise RuntimeError("Nie można załadować kaskady twarzy")
 if eye_cascade.empty():
     raise RuntimeError("Nie można załadować kaskady oczu")
 
-# --- OPTYMALIZACJA 2: Globalna instancja kamery ---
 global_camera = None
 
 
@@ -66,8 +64,6 @@ def get_camera_instance():
     """
     global global_camera
     if global_camera is None or not global_camera.isOpened():
-        # --- OPTYMALIZACJA 3: Użycie cv2.CAP_DSHOW na Windows ---
-        # DirectShow jest znacznie szybszy przy starcie niż domyślny MSMF
         global_camera = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
         global_camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -75,13 +71,11 @@ def get_camera_instance():
         global_camera.set(cv2.CAP_PROP_FPS, 30)
 
         if not global_camera.isOpened():
-            # Fallback jeśli DSHOW nie zadziała
             global_camera = cv2.VideoCapture(0)
 
     return global_camera
 
 
-# Rozszerzamy akumulator o liczniki rozproszeń
 user_accumulators = {}
 
 
@@ -91,7 +85,6 @@ def get_user_accumulator(user_id):
             "current_hour": None,
             "focused_frames": 0,
             "total_frames": 0,
-            # NOWE LICZNIKI (resetowane co godzinę przy zapisie)
             "dist_absent": 0,
             "dist_looking_away": 0,
             "dist_multiple_faces": 0,
@@ -111,7 +104,6 @@ def get_current_user_distractions(user_id):
     return {"absent": 0, "looking_away": 0, "multiple_faces": 0}
 
 
-# Globalne statystyki (chwilowe)
 current_focus_stats = {
     "is_focused": False,
     "focus_score": 100,
@@ -199,7 +191,6 @@ def end_user_stream(user_id: int) -> None:
     with _active_streams_lock:
         _active_streams.discard(user_id)
 
-        # Sprawdź, czy są jacyś inni aktywni użytkownicy
         if len(_active_streams) == 0:
             print("[INFO] Brak aktywnych użytkowników - zwalnianie zasobów kamery")
             if global_camera is not None:
@@ -208,7 +199,6 @@ def end_user_stream(user_id: int) -> None:
                 global_camera = None
 
 
-# Flaga do graceful shutdown
 shutdown_flag = False
 
 
@@ -228,20 +218,14 @@ async def generate_frames(user_id: int, request: Request):
     """
     global shutdown_flag
 
-    # USUŃ podwójne blokowanie:
-    # if not start_user_stream(user_id):
-    #     raise RuntimeError("Już masz otwartą kamerę w innej zakładce")
-
     cap = get_camera_instance()
 
     if not cap.isOpened():
-        # slot streamu był już zarezerwowany w routerze, ale generator jeszcze nie wystartował poprawnie
         end_user_stream(user_id)
         raise RuntimeError("Nie można otworzyć kamery")
 
     try:
         while True:
-            # 1. Sprawdź czy klient (frontend) zerwał połączenie
             if await request.is_disconnected():
                 print(f"[INFO] Klient rozłączony user_id={user_id}")
                 break
@@ -277,7 +261,6 @@ async def generate_frames(user_id: int, request: Request):
                 else:
                     current_distraction = "looking_away"
 
-            # Agregacja (jak w oryginalnym kodzie)
             acc = get_user_accumulator(user_id)
             now = datetime.now()
             this_hour = now.replace(minute=0, second=0, microsecond=0)
@@ -316,7 +299,6 @@ async def generate_frames(user_id: int, request: Request):
             if is_focused:
                 acc["focused_frames"] += 1
 
-            # Aktualizacja statystyk na żywo
             current_focus_stats["is_focused"] = is_focused
             current_focus_stats["history"].append(1 if is_focused else 0)
 
@@ -329,7 +311,6 @@ async def generate_frames(user_id: int, request: Request):
                 )
                 current_focus_stats["focus_score"] = int(avg * 100)
 
-            # Kodowanie i wysyłanie klatki
             ret, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if not ret:
                 print(f"[ERROR] Nie udało się zakodować klatki dla user_id={user_id}")
@@ -342,13 +323,11 @@ async def generate_frames(user_id: int, request: Request):
 
             yield frame_bytes
 
-            # Ważne: oddaj sterowanie pętli zdarzeń, aby mogła obsłużyć request.is_disconnected()
             await asyncio.sleep(0.01)
 
     except asyncio.CancelledError:
         print(f"[INFO] Strumień wideo anulowany dla user_id={user_id}")
     except GeneratorExit:
-        # klient zamknął połączenie (np. nawigacja / zamknięcie okna)
         return
     finally:
         end_user_stream(user_id)
