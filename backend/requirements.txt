@@ -1,5 +1,11 @@
 starlette
-pydantic
 fastapi[standard]
 numpy
 opencv-python
+sqlmodel
+passlib[bcrypt]
+python-jose[cryptography]
+multipart
+bcrypt==3.2.2
+python-dotenv==1.0.0
+pyinstaller

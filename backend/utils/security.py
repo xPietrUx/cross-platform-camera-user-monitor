@@ -1,0 +1,55 @@
+import os
+import sys
+from pathlib import Path
+from dotenv import load_dotenv
+from datetime import datetime, timedelta
+from typing import Optional
+from passlib.context import CryptContext
+from jose import jwt
+
+
+def _env_path() -> Path:
+    # PyInstaller: sys.executable wskazuje na api.exe
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / ".env"
+    # Dev: repo root (jak było)
+    base_dir = Path(__file__).resolve().parent.parent.parent
+    return base_dir / ".env"
+
+
+ENV_PATH = _env_path()
+load_dotenv(dotenv_path=ENV_PATH)
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
+
+if not SECRET_KEY or not ALGORITHM or not ACCESS_TOKEN_EXPIRE_MINUTES:
+    raise ValueError(f"Nie znaleziono zmiennej środowiskowej w pliku: {ENV_PATH}")
+
+
+# Konfiguracja Passlib (bcrypt)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    # Weryfikuje czy podane hasło pasuje do hasha
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    # Generuje hash hasła
+    return pwd_context.hash(password)
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    # Tworzy token JWT z czasem wygasania
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt

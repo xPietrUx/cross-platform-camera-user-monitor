@@ -1,5 +1,6 @@
 {
     "editor.formatOnSave": true,
+    "prettier.prettierPath": "frontend/node_modules/prettier",
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter"
     },
@@ -14,5 +15,9 @@
     },
     "[json]": {
         "editor.defaultFormatter": "esbenp.prettier-vscode"
-    }
+    },
+    "cSpell.words": [
+        "mainpage",
+        "tobytes"
+    ]
 }

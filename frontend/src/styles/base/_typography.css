@@ -1,0 +1,31 @@
+/* 
+    ==========================================================================
+        Typography
+    ==========================================================================
+*/
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin-bottom: var(--spacing-sm);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.2;
+}
+
+h1 {
+    font-size: calc(var(--base-font-size) * 2.5);
+}
+h2 {
+    font-size: calc(var(--base-font-size) * 2);
+}
+h3 {
+    font-size: calc(var(--base-font-size) * 1.75);
+}
+
+p {
+    margin-top: var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
+}
